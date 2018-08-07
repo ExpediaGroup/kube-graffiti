@@ -1,0 +1,12 @@
+kind: Service
+apiVersion: v1
+metadata:
+  name: istio-namespace-webhook
+  namespace: istio-namespace-webhook
+spec:
+  selector:
+    app: istio-namespace-webhook
+  ports:
+  - protocol: TCP
+    port: 443
+    targetPort: 10443

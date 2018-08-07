@@ -1,0 +1,7 @@
+istio-namespace-webhook
+.idea
+.vscode
+debug
+**/debug.test
+kubectl
+.DS_Store
