@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	"stash.hcom/run/istio-namespace-webhook/pkg/log"
+	"stash.hcom/run/kube-graffiti/pkg/log"
 )
 
 const (

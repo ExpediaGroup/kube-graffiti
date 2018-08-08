@@ -3,8 +3,8 @@ package existing
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
-	"stash.hcom/run/istio-namespace-webhook/pkg/blacklist"
-	"stash.hcom/run/istio-namespace-webhook/pkg/log"
+	"stash.hcom/run/kube-graffiti/pkg/blacklist"
+	"stash.hcom/run/kube-graffiti/pkg/log"
 )
 
 const (

@@ -31,6 +31,3 @@
   name = "k8s.io/client-go"
   version = "v7.0.0"
 
-[[constraint]]
-  branch = "release-1.10"
-  name = "k8s.io/apiextensions-apiserver"

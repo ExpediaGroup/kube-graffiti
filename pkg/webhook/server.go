@@ -8,8 +8,8 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
-	"stash.hcom/run/istio-namespace-webhook/pkg/log"
 	"stash.hcom/run/kube-graffiti/pkg/graffiti"
+	"stash.hcom/run/kube-graffiti/pkg/log"
 )
 
 type Server struct {

@@ -7,7 +7,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
-	"stash.hcom/run/istio-namespace-webhook/pkg/log"
+	"stash.hcom/run/kube-graffiti/pkg/log"
 )
 
 const componentName = "healthcheck"

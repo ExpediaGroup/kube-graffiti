@@ -15,10 +15,10 @@ import (
 	"github.com/spf13/viper"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
-	"stash.hcom/run/istio-namespace-webhook/pkg/blacklist"
-	"stash.hcom/run/istio-namespace-webhook/pkg/existing"
-	"stash.hcom/run/istio-namespace-webhook/pkg/healthcheck"
-	"stash.hcom/run/istio-namespace-webhook/pkg/webhook"
+	"stash.hcom/run/kube-graffiti/pkg/blacklist"
+	"stash.hcom/run/kube-graffiti/pkg/existing"
+	"stash.hcom/run/kube-graffiti/pkg/healthcheck"
+	"stash.hcom/run/kube-graffiti/pkg/webhook"
 )
 
 var rootCmd = &cobra.Command{

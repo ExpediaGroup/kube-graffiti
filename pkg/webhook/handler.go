@@ -9,7 +9,7 @@ import (
 
 	admission "k8s.io/api/admission/v1beta1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"stash.hcom/run/istio-namespace-webhook/pkg/log"
+	"stash.hcom/run/kube-graffiti/pkg/log"
 )
 
 // graffitHandler contains the context needed within our http handler without using global variables

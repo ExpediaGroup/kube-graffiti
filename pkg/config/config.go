@@ -7,10 +7,10 @@ import (
 
 type GraffitiConfig struct {
 	Deployment webhook.Server
-	Artists    []graffiti.Artist
+	Artists    []Artist
 }
 
 type Artist struct {
 	Registration webhook.Registration
-	Tag          graffiti.Tag
+	Rule         graffiti.Rule
 }
