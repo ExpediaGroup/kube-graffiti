@@ -80,17 +80,28 @@ func (r Rule) Mutate(req *admission.AdmissionRequest) *admission.AdmissionRespon
 		}
 	}
 
+	mylog.Debug().Bool("matches", paintIt).Msg("result of selectors")
+
 	// Combine selector booleans and decide to paint object or not
 	if !paintIt {
+		descisonLog := mylog.With().Int("label-selectors-length", len(r.Selection.LabelSelectors)).Bool("labels-matched", labelMatches).Int("field-selector-length", len(r.Selection.FieldSelectors)).Bool("fields-matched", fieldMatches).Logger()
 		switch r.Selection.BooleanOperator {
 		case AND:
 			paintIt = (len(r.Selection.LabelSelectors) == 0 || labelMatches) && (len(r.Selection.FieldSelectors) == 0 || fieldMatches)
+			descisonLog.Debug().Str("boolean-operator", "AND").Bool("result", paintIt).Msg("performed label-selector AND field-selector")
 		case OR:
-			paintIt = (len(r.Selection.LabelSelectors) == 0 || labelMatches) || (len(r.Selection.FieldSelectors) == 0 || fieldMatches)
+			paintIt = (len(r.Selection.LabelSelectors) != 0 && labelMatches) || (len(r.Selection.FieldSelectors) != 0 && fieldMatches)
+			descisonLog.Debug().Str("boolean-operator", "OR").Bool("result", paintIt).Msg("performed label-selector OR field-selector")
 		case XOR:
 			paintIt = labelMatches != fieldMatches
+			descisonLog.Debug().Str("boolean-operator", "XOR").Bool("result", paintIt).Msg("performed label-selector XOR field-selector")
+		default:
+			paintIt = false
+			descisonLog.Fatal().Str("boolean-operator", "UNKNOWN").Bool("result", paintIt).Msg("Boolean Operator isn't one of AND, OR, XOR")
 		}
 	}
+
+	mylog.Debug().Bool("matches", paintIt).Msg("result of boolean match on selectors")
 
 	if !paintIt {
 		mylog.Info().Str("name", metaObject.Meta.Name).Str("namespace", metaObject.Meta.Namespace).Msg("rules did not match, no modifications made")
