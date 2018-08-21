@@ -23,12 +23,12 @@ type Server struct {
 
 // NewServer creates a new webhook server and sets up the initial graffiti handler.
 // Use AddGraffitiRule to load the rules into the webhook server before starting.
-func NewServer(cd, ns, svc string, ca []byte, k kubernetes.Clientset, port int) Server {
+func NewServer(cd, ns, svc string, ca []byte, k *kubernetes.Clientset, port int) Server {
 	mylog := log.ComponentLogger(componentName, "NewServer")
 	mylog.Debug().Int("port", port).Msg("creating a new webhook server")
 
 	mux := http.NewServeMux()
-	tls := configTLS(&k)
+	tls := configTLS(k)
 	server := &http.Server{
 		Addr:      fmt.Sprintf(":%d", port),
 		Handler:   mux,
@@ -51,7 +51,7 @@ func (s Server) AddGraffitiRule(path string, rule graffiti.Rule) {
 	s.handler.addRule(path, rule)
 }
 
-// StartWebhookSecureServer starts the webhook server with TLS encryption
+// StartWebhookServer starts the webhook server with TLS encryption
 func (s Server) StartWebhookServer(certPath, keyPath string) {
 	mylog := log.ComponentLogger(componentName, "StartWebhookSecureServer")
 	mylog.Info().Str("certPath", certPath).Str("keyPath", keyPath).Msg("starting the secure webhook http server...")
@@ -65,6 +65,18 @@ func (s Server) StartWebhookServer(certPath, keyPath string) {
 	}()
 
 	return
+}
+
+func configTLS(clientset *kubernetes.Clientset) *tls.Config {
+	cert := getAPIServerCert(clientset)
+	apiserverCA := x509.NewCertPool()
+	apiserverCA.AppendCertsFromPEM(cert)
+
+	return &tls.Config{
+		ClientCAs:  apiserverCA,
+		ClientAuth: tls.NoClientCert,
+		NextProtos: []string{"http/1.1"},
+	}
 }
 
 // retrieve the CA cert that will signed the cert used by the
@@ -83,16 +95,4 @@ func getAPIServerCert(clientset *kubernetes.Clientset) []byte {
 	}
 	mylog.Debug().Str("client-ca", pem).Msg("client ca loaded")
 	return []byte(pem)
-}
-
-func configTLS(clientset *kubernetes.Clientset) *tls.Config {
-	cert := getAPIServerCert(clientset)
-	apiserverCA := x509.NewCertPool()
-	apiserverCA.AppendCertsFromPEM(cert)
-
-	return &tls.Config{
-		ClientCAs:  apiserverCA,
-		ClientAuth: tls.NoClientCert,
-		NextProtos: []string{"http/1.1"},
-	}
 }

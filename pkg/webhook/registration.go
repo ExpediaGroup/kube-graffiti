@@ -24,6 +24,7 @@ type Target struct {
 	Resources   []string
 }
 
+// NewRegistration builder for Registration objects
 func NewRegistration(name string, targets []Target, nselect, policy string) (Registration, error) {
 	mylog := log.ComponentLogger(componentName, "NewRegistration")
 
@@ -48,7 +49,7 @@ func NewRegistration(name string, targets []Target, nselect, policy string) (Reg
 	}, nil
 }
 
-// RegisterWebhook registers our webhook as MutatingWebhook with the kubernetes api.
+// RegisterHook registers our webhook as MutatingWebhook with the kubernetes api.
 func (s Server) RegisterHook(path string, r Registration, clientset *kubernetes.Clientset) error {
 	mylog := log.ComponentLogger(componentName, "RegisterHook")
 

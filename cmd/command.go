@@ -7,60 +7,58 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"regexp"
 	"strings"
 	"time"
 
-	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
+	"stash.hcom/run/kube-graffiti/pkg/config"
 	"stash.hcom/run/kube-graffiti/pkg/existing"
+	"stash.hcom/run/kube-graffiti/pkg/graffiti"
 	"stash.hcom/run/kube-graffiti/pkg/healthcheck"
+	"stash.hcom/run/kube-graffiti/pkg/log"
 	"stash.hcom/run/kube-graffiti/pkg/webhook"
 )
 
 var (
-	cfgFile string
-	rootCmd = &cobra.Command{
+	componentName = "cmd"
+	cfgFile       string
+	rootCmd       = &cobra.Command{
 		Use:   "kube-grafitti",
 		Short: "Automatically add labels and/or annotations to kubernetes objects",
 		Long:  "Write rules that match labels and object fields and add labels/annotations to kubernetes objects as they are created via a mutating webhook.",
 		Run:   runRootCmd,
 	}
+	defaultConfigPath = "/config"
 )
 
 // init defines command-line and environment arguments
 func init() {
 	cobra.OnInitialize(initConfig)
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is /config.yaml)")
-	rootCmd.PersistentFlags().String("log-level", defaultLogLevel, "[LOG_LEVEL] set logging verbosity to one of panic, fatal, error, warn, info, debug")
-	bindCmdEnvFlag(rootCmd, "server.log-level", "log-level")
-	rootCmd.PersistentFlags().Bool("check-existing", false, "[CHECK_EXISTING] check and update existing namespaces")
-	bindCmdEnvFlag(rootCmd, "server.check-existing", "check-existing")
+	rootCmd.PersistentFlags().String("log-level", config.DefaultLogLevel, "[GRAFFITI_SERVER_LOG_LEVEL] set logging verbosity to one of panic, fatal, error, warn, info, debug")
+	viper.BindPFlag("server.log-level", rootCmd.PersistentFlags().Lookup("log-level"))
+	rootCmd.PersistentFlags().Bool("check-existing", false, "[GRAFFITTI_SERVER_CHECK_EXISTING] run rules against existing objects")
+	viper.BindPFlag("server.check-existing", rootCmd.PersistentFlags().Lookup("check-existing"))
+
+	// set up Viper environment variable binding...
+	replacer := strings.NewReplacer("-", "_", ".", "_")
+	viper.SetEnvPrefix("GRAFFITI_")
+	viper.SetEnvKeyReplacer(replacer)
+	viper.AutomaticEnv()
+	config.SetDefaults()
 }
 
-func bindCmdEnvFlag(command *cobra.Command, nested, short string) {
-	viper.BindPFlag(nested, command.PersistentFlags().Lookup(short))
-	viper.BindEnv(nested, paramToEnv(short))
-}
-
-func paramToEnv(p string) string {
-	var re = regexp.MustCompile(`[^a-zA-Z0-9]+`)
-	e := strings.ToUpper(re.ReplaceAllString(p, "_"))
-	return e
-}
-
-// initConfig
+// initConfig is reponsible for loading the viper configuration file.
 func initConfig() {
 	// Don't forget to read config either from cfgFile or from home directory!
 	if cfgFile != "" {
 		// Use config file from the flag.
 		viper.SetConfigFile(cfgFile)
 	} else {
-		viper.SetConfigName("/config")
+		viper.SetConfigName(defaultConfigPath)
 	}
 
 	if err := viper.ReadInConfig(); err != nil {
@@ -78,20 +76,26 @@ func Execute() {
 
 // runRootCmd is the main program which starts up our services and waits for them to complete
 func runRootCmd(_ *cobra.Command, _ []string) {
-	initLogger()
-	config := loadConfigFromViper()
-	if err := config.validateConfig(); err != nil {
-		log.Fatal().Err(err).Msg("failed to validate config")
+	log.InitLogger(viper.GetString("server.log-level"))
+	mylog := log.ComponentLogger(componentName, "runRootCmd")
+
+	config, err := config.ReadConfiguration()
+	if err != nil {
+		mylog.Fatal().Err(err).Msg("failed to load config")
 	}
+	if err := config.ValidateConfig(); err != nil {
+		mylog.Fatal().Err(err).Msg("failed to validate config")
+	}
+
 	kubeClient := initKubeClient()
 
-	if err := initWebhookServer(kubeClient); err != nil {
-		log.Fatal().Err(err).Msg("webhook server failed to start")
+	healthcheck.AddHealthCheckHandler(viper.GetString("server.health-path"), kubeClient)
+	if err := initMetricsWebServer(); err != nil {
+		mylog.Fatal().Err(err).Msg("metrics/health server failed to start")
 	}
 
-	healthcheck.AddHealthCheckHandler(defaultHealthPath, kubeClient)
-	if err := initMetricsWebServer(); err != nil {
-		log.Fatal().Err(err).Msg("metrics/health server failed to start")
+	if err := initWebhookServer(config, kubeClient); err != nil {
+		mylog.Fatal().Err(err).Msg("webhook server failed to start")
 	}
 
 	/*if err := initExistingNamespacesCheck(kubeClient); err != nil {
@@ -105,25 +109,17 @@ func runRootCmd(_ *cobra.Command, _ []string) {
 	os.Exit(0)
 }
 
-// initLogger sets up our logger such as logging level and to use the consolewriter.
-func initLogger() {
-	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
-	// set level width if PR https://github.com/rs/zerolog/pull/87 is accepted
-	// zerolog.LevelWidth = 5
-	level := getParam("loglevel", defaultLogLevel).(string)
-	zerolog.SetGlobalLevel(logLevels[level])
-}
-
 // initKubeClient returns a valid kubernetes client only when running within a kubernetes pod.
 func initKubeClient() *kubernetes.Clientset {
+	mylog := log.ComponentLogger(componentName, "initKubeClient")
 	// creates the in-cluster config
-	log.Info().Msg("creating kubeconfig")
+	mylog.Info().Msg("creating kubeconfig")
 	config, err := rest.InClusterConfig()
 	if err != nil {
 		panic(err.Error())
 	}
 	// creates the clientset
-	log.Debug().Msg("creating kubernetes api clientset")
+	mylog.Debug().Msg("creating kubernetes api clientset")
 	clientset, err := kubernetes.NewForConfig(config)
 	if err != nil {
 		panic(err.Error())
@@ -132,60 +128,95 @@ func initKubeClient() *kubernetes.Clientset {
 }
 
 func initMetricsWebServer() error {
-	port := getParam("metrics-port", defaultMetricsPort).(int)
-	log.Info().Int("metrics-port", port).Msg("starting metrics/health web server")
+	mylog := log.ComponentLogger(componentName, "initMetricsWebServer")
+
+	port := viper.GetInt("server.metrics-port")
+	mylog.Info().Int("metrics-port", port).Msg("starting metrics/health web server")
 	go func() {
 		if err := http.ListenAndServe(fmt.Sprintf(":%d", port), nil); err != nil {
-			log.Error().Err(err).Msg("health check webserver failed")
+			mylog.Error().Err(err).Msg("health check webserver failed")
 			panic("healthz webserver failed")
 		}
 	}()
 	return nil
 }
 
-func initWebhookServer(k *kubernetes.Clientset) error {
-	port := getParam("webhook-port", defaultWebhookPort).(int)
-	paths := make(map[string]string, 3)
-	for _, p := range []string{"webhook-certfile", "webhook-keyfile", "webhook-cafile"} {
-		paths[p] = getParam(p, "ERROR").(string)
-		if paths[p] == "ERROR" {
-			log.Fatal().Str("parameter", p).Msg("missing required parameter value")
+func initWebhookServer(c *config.Configuration, k *kubernetes.Clientset) error {
+	mylog := log.ComponentLogger(componentName, "initWebhookServer")
+	port := viper.GetInt("server.port")
+
+	mylog.Debug().Int("port", port).Msg("creating a new webhook server")
+	caPath := viper.GetString("server.ca-path")
+	ca, err := ioutil.ReadFile(caPath)
+	if err != nil {
+		mylog.Error().Err(err).Str("path", caPath).Msg("Failed to load ca from file")
+		return errors.New("failed to load ca from file")
+	}
+	server := webhook.NewServer(
+		viper.GetString("server.company-domain"),
+		viper.GetString("server.namespace"),
+		viper.GetString("server.service"),
+		ca, k,
+		viper.GetInt("server.port"),
+	)
+
+	// add each of the graffiti rules into the mux
+	for _, rule := range c.Rules {
+		graffitiRule, err := graffiti.NewRule(
+			rule.Matcher.LabelSelectors,
+			rule.Matcher.FieldSelectors,
+			rule.Matcher.BooleanOperator,
+			rule.Additions.Annotations,
+			rule.Additions.Labels,
+		)
+		if err != nil {
+			return err
+		}
+		server.AddGraffitiRule(*webhook.Path(rule.Registration.Name), graffitiRule)
+		return nil
+	}
+
+	mylog.Info().Int("port", port).Msg("starting webhook secure webserver")
+	server.StartWebhookServer(viper.GetString("server.cert-path"), viper.GetString("server.key-path"))
+
+	mylog.Debug().Msg("waiting 2 seconds")
+	time.Sleep(2 * time.Second)
+
+	// register all rules with the kubernetes apiserver
+	for _, rule := range c.Rules {
+		graffitiReg, err := webhook.NewRegistration(
+			rule.Registration.Name,
+			[]webhook.Target(rule.Registration.Targets),
+			rule.Registration.NamespaceSelector,
+			rule.Registration.FailurePolicy,
+		)
+		if err != nil {
+			mylog.Error().Err(err).Str("name", rule.Registration.Name).Msg("failed to create registration")
+			return err
+		}
+		mylog.Info().Str("name", rule.Registration.Name).Msg("registering rule with api server")
+		err = server.RegisterHook(*webhook.Path(rule.Registration.Name), graffitiReg, k)
+		if err != nil {
+			mylog.Error().Err(err).Str("name", rule.Registration.Name).Msg("failed to register rule with apiserver")
+			return err
 		}
 	}
 
-	log.Info().Int("port", port).Msg("starting webhook secure webserver")
-	webhook.StartWebhookServer(port, k, paths["webhook-certfile"], paths["webhook-keyfile"])
-
-	log.Debug().Msg("waiting 2 seconds")
-	time.Sleep(2 * time.Second)
-
-	name := getParam("webhook-name", defaultWebHookName).(string)
-	ns := getParam("namespace", defaultWebHookNamespace).(string)
-
-	ca, err := ioutil.ReadFile(paths["webhook-cafile"])
-	if err != nil {
-		log.Error().Err(err).Str("path", paths["webhook-cafile"]).Msg("Failed to load ca")
-		return errors.New("failed to read ca")
-	}
-
-	log.Info().Msg("registering webhook with apiserver")
-	if err := webhook.RegisterWebhook(k, name, ns, ca); err != nil {
-		return err
-	}
 	return nil
 }
 
 func initExistingCheck(k *kubernetes.Clientset) error {
+	mylog := log.ComponentLogger(componentName, "initExistingCheck")
+
 	var err error
-	doCheck := getParam("check-existing", false).(bool)
-	if !doCheck {
-		log.Info().Msg("checking of existing objects is disabled")
+	if viper.GetBool("check-existing") {
+		mylog.Info().Msg("checking of existing objects is disabled")
 		return nil
 	}
 	if err = existing.CheckExistingObjects(k); err != nil {
 		return err
 	}
-	log.Info().Msg("check of existing objects completed successfully")
+	mylog.Info().Msg("check of existing objects completed successfully")
 
 	return nil
 }
