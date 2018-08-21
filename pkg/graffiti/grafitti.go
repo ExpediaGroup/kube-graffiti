@@ -28,20 +28,21 @@ const (
 	XOR
 )
 
-type Selection struct {
-	LabelSelectors  []string        `json:"label-selectors,omitempty"`
-	FieldSelectors  []string        `json:"field-selectors,omitempty"`
-	BooleanOperator BooleanOperator `json:"boolean-operator,omitempty"`
+// Matcher
+type Matcher struct {
+	LabelSelectors  []string        `mapstructure:"label-selectors" json:"label-selectors,omitempty"`
+	FieldSelectors  []string        `mapstructure:"field-selectors" json:"field-selectors,omitempty"`
+	BooleanOperator BooleanOperator `mapstructure:"boolean-operator" json:"boolean-operator,omitempty"`
 }
 
 type Additions struct {
-	Annotations map[string]string `json:"annotations,omitempty"`
-	Labels      map[string]string `json:"labels,omitempty"`
+	Annotations map[string]string `mapstructure:"annotations" json:"annotations,omitempty"`
+	Labels      map[string]string `mapstructure:"labels" json:"labels,omitempty"`
 }
 
 type Rule struct {
-	Selection Selection `json:"selection,omitempty"`
-	Additions Additions `json:"additions`
+	Matcher   Matcher   `mapstructure:"matcher" json:"matcher,omitempty"`
+	Additions Additions `mapstructure:"additions" json:"additions`
 }
 
 // genericObject is used only for pulling out object metadata
@@ -64,7 +65,7 @@ func (r Rule) Mutate(req *admission.AdmissionRequest) *admission.AdmissionRespon
 		return admissionResponseError(err)
 	}
 
-	if len(r.Selection.LabelSelectors) == 0 && len(r.Selection.FieldSelectors) == 0 {
+	if len(r.Matcher.LabelSelectors) == 0 && len(r.Matcher.FieldSelectors) == 0 {
 		paintIt = true
 	} else {
 		// match against all of the label selectors
@@ -80,17 +81,17 @@ func (r Rule) Mutate(req *admission.AdmissionRequest) *admission.AdmissionRespon
 		}
 	}
 
-	mylog.Debug().Bool("matches", paintIt).Msg("result of selectors")
+	mylog.Debug().Bool("paintIt", paintIt).Msg("boolean result of paintIt before boolean operator")
 
 	// Combine selector booleans and decide to paint object or not
 	if !paintIt {
-		descisonLog := mylog.With().Int("label-selectors-length", len(r.Selection.LabelSelectors)).Bool("labels-matched", labelMatches).Int("field-selector-length", len(r.Selection.FieldSelectors)).Bool("fields-matched", fieldMatches).Logger()
-		switch r.Selection.BooleanOperator {
+		descisonLog := mylog.With().Int("label-selectors-length", len(r.Matcher.LabelSelectors)).Bool("labels-matched", labelMatches).Int("field-selector-length", len(r.Matcher.FieldSelectors)).Bool("fields-matched", fieldMatches).Logger()
+		switch r.Matcher.BooleanOperator {
 		case AND:
-			paintIt = (len(r.Selection.LabelSelectors) == 0 || labelMatches) && (len(r.Selection.FieldSelectors) == 0 || fieldMatches)
+			paintIt = (len(r.Matcher.LabelSelectors) == 0 || labelMatches) && (len(r.Matcher.FieldSelectors) == 0 || fieldMatches)
 			descisonLog.Debug().Str("boolean-operator", "AND").Bool("result", paintIt).Msg("performed label-selector AND field-selector")
 		case OR:
-			paintIt = (len(r.Selection.LabelSelectors) != 0 && labelMatches) || (len(r.Selection.FieldSelectors) != 0 && fieldMatches)
+			paintIt = (len(r.Matcher.LabelSelectors) != 0 && labelMatches) || (len(r.Matcher.FieldSelectors) != 0 && fieldMatches)
 			descisonLog.Debug().Str("boolean-operator", "OR").Bool("result", paintIt).Msg("performed label-selector OR field-selector")
 		case XOR:
 			paintIt = labelMatches != fieldMatches
@@ -101,7 +102,7 @@ func (r Rule) Mutate(req *admission.AdmissionRequest) *admission.AdmissionRespon
 		}
 	}
 
-	mylog.Debug().Bool("matches", paintIt).Msg("result of boolean match on selectors")
+	mylog.Debug().Bool("matches", paintIt).Msg("result of boolean operator match on selectors")
 
 	if !paintIt {
 		mylog.Info().Str("name", metaObject.Meta.Name).Str("namespace", metaObject.Meta.Namespace).Msg("rules did not match, no modifications made")
@@ -114,7 +115,7 @@ func (r Rule) Mutate(req *admission.AdmissionRequest) *admission.AdmissionRespon
 func (r Rule) matchLabelSelectors(object metaObject) (bool, error) {
 	mylog := log.ComponentLogger(componentName, "matchLabelSelectors")
 	// test if we matched any of the label selectors
-	if len(r.Selection.LabelSelectors) != 0 {
+	if len(r.Matcher.LabelSelectors) != 0 {
 		// add name and namespace as labels so they can be matched with the label selector
 		if len(object.Meta.Labels) == 0 {
 			object.Meta.Labels = make(map[string]string)
@@ -122,7 +123,7 @@ func (r Rule) matchLabelSelectors(object metaObject) (bool, error) {
 		object.Meta.Labels["name"] = object.Meta.Name
 		object.Meta.Labels["namespace"] = object.Meta.Namespace
 
-		for _, selector := range r.Selection.LabelSelectors {
+		for _, selector := range r.Matcher.LabelSelectors {
 			mylog.Debug().Str("label-selector", selector).Msg("testing label selector")
 			selectorMatch, err := matchLabelSelector(selector, object.Meta.Labels)
 			if err != nil {
@@ -159,13 +160,13 @@ func matchLabelSelector(selector string, target map[string]string) (bool, error)
 
 func (r Rule) matchFieldSelectors(raw []byte) (bool, error) {
 	mylog := log.ComponentLogger(componentName, "matchFieldSelectors")
-	if len(r.Selection.FieldSelectors) != 0 {
+	if len(r.Matcher.FieldSelectors) != 0 {
 		fieldMap, err := makeFieldMap(raw)
 		if err != nil {
 			return false, err
 		}
 
-		for _, selector := range r.Selection.FieldSelectors {
+		for _, selector := range r.Matcher.FieldSelectors {
 			mylog.Debug().Str("field-selector", selector).Msg("testing field selector")
 			selectorMatch, err := matchFieldSelector(selector, fieldMap)
 			if err != nil {

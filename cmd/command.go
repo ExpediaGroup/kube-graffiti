@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"regexp"
+	"strings"
 	"time"
 
 	"github.com/rs/zerolog"
@@ -15,17 +17,56 @@ import (
 	"github.com/spf13/viper"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
-	"stash.hcom/run/kube-graffiti/pkg/blacklist"
 	"stash.hcom/run/kube-graffiti/pkg/existing"
 	"stash.hcom/run/kube-graffiti/pkg/healthcheck"
 	"stash.hcom/run/kube-graffiti/pkg/webhook"
 )
 
-var rootCmd = &cobra.Command{
-	Use:   "namespace-webhook",
-	Short: "Automatically add labels and/or annotations to your namespaces",
-	Long:  "Operates as a kubernetes mutating webhook that compares each namespace to a blacklist before applying the alterations",
-	Run:   runRootCmd,
+var (
+	cfgFile string
+	rootCmd = &cobra.Command{
+		Use:   "kube-grafitti",
+		Short: "Automatically add labels and/or annotations to kubernetes objects",
+		Long:  "Write rules that match labels and object fields and add labels/annotations to kubernetes objects as they are created via a mutating webhook.",
+		Run:   runRootCmd,
+	}
+)
+
+// init defines command-line and environment arguments
+func init() {
+	cobra.OnInitialize(initConfig)
+	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is /config.yaml)")
+	rootCmd.PersistentFlags().String("log-level", defaultLogLevel, "[LOG_LEVEL] set logging verbosity to one of panic, fatal, error, warn, info, debug")
+	bindCmdEnvFlag(rootCmd, "server.log-level", "log-level")
+	rootCmd.PersistentFlags().Bool("check-existing", false, "[CHECK_EXISTING] check and update existing namespaces")
+	bindCmdEnvFlag(rootCmd, "server.check-existing", "check-existing")
+}
+
+func bindCmdEnvFlag(command *cobra.Command, nested, short string) {
+	viper.BindPFlag(nested, command.PersistentFlags().Lookup(short))
+	viper.BindEnv(nested, paramToEnv(short))
+}
+
+func paramToEnv(p string) string {
+	var re = regexp.MustCompile(`[^a-zA-Z0-9]+`)
+	e := strings.ToUpper(re.ReplaceAllString(p, "_"))
+	return e
+}
+
+// initConfig
+func initConfig() {
+	// Don't forget to read config either from cfgFile or from home directory!
+	if cfgFile != "" {
+		// Use config file from the flag.
+		viper.SetConfigFile(cfgFile)
+	} else {
+		viper.SetConfigName("/config")
+	}
+
+	if err := viper.ReadInConfig(); err != nil {
+		fmt.Println("Can't read config:", err)
+		os.Exit(1)
+	}
 }
 
 func Execute() {
@@ -42,8 +83,6 @@ func runRootCmd(_ *cobra.Command, _ []string) {
 	if err := config.validateConfig(); err != nil {
 		log.Fatal().Err(err).Msg("failed to validate config")
 	}
-	bl := initBlackList()
-	blacklist.SharedBlacklist = bl
 	kubeClient := initKubeClient()
 
 	if err := initWebhookServer(kubeClient); err != nil {
@@ -55,9 +94,9 @@ func runRootCmd(_ *cobra.Command, _ []string) {
 		log.Fatal().Err(err).Msg("metrics/health server failed to start")
 	}
 
-	if err := initExistingNamespacesCheck(kubeClient); err != nil {
+	/*if err := initExistingNamespacesCheck(kubeClient); err != nil {
 		log.Fatal().Err(err).Msg("failed to check existing namespaces")
-	}
+	}*/
 
 	// wait for an interrupt
 	signalChan := make(chan os.Signal, 1)
@@ -73,17 +112,6 @@ func initLogger() {
 	// zerolog.LevelWidth = 5
 	level := getParam("loglevel", defaultLogLevel).(string)
 	zerolog.SetGlobalLevel(logLevels[level])
-}
-
-// initBlackList loads the blacklist from values configured in the environment 'BLACKLIST', e.g. BLACKLIST="a b c d"
-// or command-line --blacklist=a,b,c --blacklist=d results in blacklist [ "a", "b", "c", "d" ]
-// Entry can not be mixed, environment will be ignored if command-line --blacklist is supplied.
-func initBlackList() blacklist.Blacklist {
-	bl := blacklist.New()
-	if viper.IsSet("blacklist") {
-		bl.Set(getParam("blacklist", []string{}).([]string)...)
-	}
-	return bl
 }
 
 // initKubeClient returns a valid kubernetes client only when running within a kubernetes pod.
@@ -147,17 +175,17 @@ func initWebhookServer(k *kubernetes.Clientset) error {
 	return nil
 }
 
-func initExistingNamespacesCheck(k *kubernetes.Clientset) error {
+func initExistingCheck(k *kubernetes.Clientset) error {
 	var err error
 	doCheck := getParam("check-existing", false).(bool)
 	if !doCheck {
-		log.Info().Msg("checking of existing namespaces is disabled")
+		log.Info().Msg("checking of existing objects is disabled")
 		return nil
 	}
-	if err = existing.CheckExistingNamespaces(k); err != nil {
+	if err = existing.CheckExistingObjects(k); err != nil {
 		return err
 	}
-	log.Info().Msg("check of existing namespaces completed successfully")
+	log.Info().Msg("check of existing objects completed successfully")
 
 	return nil
 }
