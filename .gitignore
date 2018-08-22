@@ -1,4 +1,4 @@
-istio-namespace-webhook
+kube-graffiti
 .idea
 .vscode
 debug
