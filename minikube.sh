@@ -1,5 +1,8 @@
 #!/bin/bash -ue
 
+NAMESPACE=default
+DEPLOYNAME=kube-graffiti
+
 minikube_running() {
   minikube status | head -1 | awk '{print $2}' | grep -q -e "Running"
 }
@@ -65,6 +68,6 @@ do
   [[ -f "testing/${template}.yaml" ]] && ./$kubectlbin apply -f testing/${template}.yaml
 done
 eval $(minikube docker-env)
-docker build --rm -t istio-namespace-webhook:dev .
-./${kubectlbin} -n istio-namespace-webhook get deploy istio-namespace-webhook && ./${kubectlbin} -n istio-namespace-webhook delete deployment istio-namespace-webhook
+docker build --rm -t ${DEPLOYNAME}:dev .
+./${kubectlbin} -n ${NAMESPACE} get deploy ${DEPLOYNAME} && ./${kubectlbin} -n ${NAMESPACE} delete deployment ${DEPLOYNAME}
 ./$kubectlbin create -f testing/deploy.yaml

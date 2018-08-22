@@ -5,6 +5,8 @@ import (
 	"fmt"
 
 	"github.com/spf13/viper"
+	"stash.hcom/run/kube-graffiti/pkg/graffiti"
+	"stash.hcom/run/kube-graffiti/pkg/healthcheck"
 	"stash.hcom/run/kube-graffiti/pkg/log"
 	"stash.hcom/run/kube-graffiti/pkg/webhook"
 )
@@ -18,55 +20,37 @@ const (
 // All of our configuration modelled with mapstructure tags so that we can use viper to properly parse and load it for us.
 
 type Configuration struct {
-	Server Server `mapstructure:"server"`
-	Rules  []Rule `mapstructure:"rules"`
+	LogLevel      string                    `mapstructure:"log-level"`
+	CheckExisting bool                      `mapstructure:"check-existing"`
+	HealthChecker healthcheck.HealthChecker `mapstructure:"health-checker"`
+	Server        Server                    `mapstructure:"server"`
+	Rules         []Rule                    `mapstructure:"rules"`
 }
 
 type Server struct {
-	LogLevel       string `mapstructure:"log-level"`
 	WebhookPort    int    `mapstructure:"port"`
-	MetricsPort    int    `mapstructure:"metrics-port"`
-	HealthPath     string `mapstructure:"health-path"`
 	CompanyDomain  string `mapstructure:"company-domain"`
 	Namespace      string `mapstructure:"namespace"`
 	Service        string `mapstructure:"service"`
 	CACertPath     string `mapstructure:"ca-cert-path"`
 	ServerCertPath string `mapstructure:"cert-path"`
 	ServerKeyPath  string `mapstructure:"key-path"`
-	CheckExisting  bool   `mapstructure:"check-existing"`
 }
 
 type Rule struct {
-	Registration Registration `mapstructure:"registration"`
-	Matcher      Matcher      `mapstructure:"matcher"`
-	Additions    Additions    `mapstructure:"additions"`
-}
-
-type Registration struct {
-	Name              string           `mapstructure:"name"`
-	Targets           []webhook.Target `mapstructure:"targets"`
-	NamespaceSelector string           `mapstructure:"namespace-selector"`
-	FailurePolicy     string           `mapstructure:"failure-policy"`
-}
-
-type Matcher struct {
-	LabelSelectors  []string `mapstructure:"label-selectors"`
-	FieldSelectors  []string `mapstructure:"field-selectors"`
-	BooleanOperator string   `mapstructure:"boolean-operator"`
-}
-
-type Additions struct {
-	Annotations map[string]string `mapstructure:"annotations"`
-	Labels      map[string]string `mapstructure:"labels"`
+	Registration webhook.Registration `mapstructure:"registration"`
+	Matcher      graffiti.Matcher     `mapstructure:"matcher"`
+	Additions    graffiti.Additions   `mapstructure:"additions"`
 }
 
 func SetDefaults() {
+	viper.SetDefault("log-level", DefaultLogLevel)
+	viper.SetDefault("check-existing", false)
 	viper.SetDefault("server.metrics-port", 8080)
 	viper.SetDefault("server.port", 8443)
-	viper.SetDefault("server.log-level", DefaultLogLevel)
-	viper.SetDefault("server.health-path", "/healthz")
+	viper.SetDefault("health-checker.port", 8080)
+	viper.SetDefault("health-checker.health-path", "/healthz")
 	viper.SetDefault("server.company-domain", "acme.com")
-	viper.SetDefault("server.check-existing", false)
 	viper.SetDefault("server.ca-cert-path", "/ca.pem")
 }
 
@@ -90,8 +74,8 @@ func (c *Configuration) ValidateConfig() error {
 // validateLogArgs check that a requested log-level is defined/allowed.
 func (c *Configuration) validateLogArgs() error {
 	// check the configured log level is valid.
-	if _, ok := log.LogLevels[c.Server.LogLevel]; !ok {
-		return errors.New(c.Server.LogLevel + "is not a valid log-level")
+	if _, ok := log.LogLevels[c.LogLevel]; !ok {
+		return errors.New(c.LogLevel + " is not a valid log-level")
 	}
 	return nil
 }

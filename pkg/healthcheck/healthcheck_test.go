@@ -35,9 +35,8 @@ func TestHealthlyCheck(t *testing.T) {
 	// set up the mocks
 	lister := new(kubernetesNamespaceAccessorMock)
 	lister.On("List", mock.AnythingOfType("v1.ListOptions")).Return(&corev1.NamespaceList{}, nil)
-	client := new(kubernetesClientMock)
-	client.On("namespaces").Return(lister)
-	healthCheckClient = client
+	kclient := new(kubernetesClientMock)
+	kclient.On("namespaces").Return(lister)
 
 	// Create a request to pass to our handler. We don't have any query parameters for now, so we'll
 	// pass 'nil' as the third parameter.
@@ -46,14 +45,14 @@ func TestHealthlyCheck(t *testing.T) {
 
 	// We create a ResponseRecorder (which satisfies http.ResponseWriter) to record the response.
 	rr := httptest.NewRecorder()
-	handler := http.HandlerFunc(healthCheckHandler)
+	checker := NewHealthChecker(kclient, 80, "/healthz")
 
 	// Our handlers satisfy http.Handler, so we can call their ServeHTTP method
 	// directly and pass in our Request and ResponseRecorder.
-	handler.ServeHTTP(rr, req)
+	checker.ServeHTTP(rr, req)
 
 	assert.Equal(t, rr.Code, http.StatusOK)
-	client.AssertExpectations(t)
+	kclient.AssertExpectations(t)
 	lister.AssertExpectations(t)
 
 	// Check the response body is what we expect.
@@ -65,9 +64,8 @@ func TestUnHealthlyCheck(t *testing.T) {
 	// set up the mocks
 	lister := new(kubernetesNamespaceAccessorMock)
 	lister.On("List", mock.AnythingOfType("v1.ListOptions")).Return(&corev1.NamespaceList{}, fmt.Errorf("test error"))
-	client := new(kubernetesClientMock)
-	client.On("namespaces").Return(lister)
-	healthCheckClient = client
+	kclient := new(kubernetesClientMock)
+	kclient.On("namespaces").Return(lister)
 
 	// Create a request to pass to our handler. We don't have any query parameters for now, so we'll
 	// pass 'nil' as the third parameter.
@@ -76,14 +74,14 @@ func TestUnHealthlyCheck(t *testing.T) {
 
 	// We create a ResponseRecorder (which satisfies http.ResponseWriter) to record the response.
 	rr := httptest.NewRecorder()
-	handler := http.HandlerFunc(healthCheckHandler)
+	checker := NewHealthChecker(kclient, 80, "/healthz")
 
 	// Our handlers satisfy http.Handler, so we can call their ServeHTTP method
 	// directly and pass in our Request and ResponseRecorder.
-	handler.ServeHTTP(rr, req)
+	checker.ServeHTTP(rr, req)
 
 	assert.Equal(t, rr.Code, http.StatusInternalServerError)
-	client.AssertExpectations(t)
+	kclient.AssertExpectations(t)
 	lister.AssertExpectations(t)
 
 	// Check the response body is what we expect.

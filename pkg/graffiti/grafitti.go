@@ -30,45 +30,26 @@ const (
 
 // Rule contains a single graffiti rule and contains matchers for choosing which objects to change and additions which are the fields we want to add.
 type Rule struct {
-	Matcher   Matcher   `mapstructure:"matcher" json:"matcher,omitempty"`
-	Additions Additions `mapstructure:"additions" json:"additions`
+	Matcher   Matcher   `mapstructure:"matcher"`
+	Additions Additions `mapstructure:"additions"`
 }
 
 // Matcher manages the rules of matching an object
 type Matcher struct {
-	LabelSelectors  []string        `mapstructure:"label-selectors" json:"label-selectors,omitempty"`
-	FieldSelectors  []string        `mapstructure:"field-selectors" json:"field-selectors,omitempty"`
-	BooleanOperator BooleanOperator `mapstructure:"boolean-operator" json:"boolean-operator,omitempty"`
+	LabelSelectors  []string        `mapstructure:"label-selectors"`
+	FieldSelectors  []string        `mapstructure:"field-selectors"`
+	BooleanOperator BooleanOperator `mapstructure:"boolean-operator"`
 }
 
 // Additions contains the additional fields that we want to insert into the object
 type Additions struct {
-	Annotations map[string]string `mapstructure:"annotations" json:"annotations,omitempty"`
-	Labels      map[string]string `mapstructure:"labels" json:"labels,omitempty"`
+	Annotations map[string]string `mapstructure:"annotations"`
+	Labels      map[string]string `mapstructure:"labels"`
 }
 
 // genericObject is used only for pulling out object metadata
 type metaObject struct {
 	Meta metav1.ObjectMeta `json:"metadata"`
-}
-
-// NewRule creates a Graffiti rule from constituent configured parts
-func NewRule(ls, fs []string, joiner string, lab, anno map[string]string) (Rule, error) {
-	bop, err := BooleanOperatorString(joiner)
-	if err != nil {
-		return Rule{}, err
-	}
-	return Rule{
-		Matcher: Matcher{
-			LabelSelectors:  ls,
-			FieldSelectors:  fs,
-			BooleanOperator: bop,
-		},
-		Additions: Additions{
-			Annotations: anno,
-			Labels:      lab,
-		},
-	}, nil
 }
 
 func (r Rule) Mutate(req *admission.AdmissionRequest) *admission.AdmissionResponse {

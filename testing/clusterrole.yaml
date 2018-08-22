@@ -1,10 +1,10 @@
 apiVersion: rbac.authorization.k8s.io/v1beta1
 kind: ClusterRole
 metadata:
-  name: isto-namespace-webhook
-  namespace: istio-namespace-webhook
+  name: kube-graffiti
+  namespace: kube-graffiti
   labels:
-    app: istio-namespace-webhook
+    app: kube-graffiti
 rules:
   - apiGroups:
       - ""

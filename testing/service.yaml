@@ -1,12 +1,12 @@
 kind: Service
 apiVersion: v1
 metadata:
-  name: istio-namespace-webhook
-  namespace: istio-namespace-webhook
+  name: kube-graffiti
+  namespace: kube-graffiti
 spec:
   selector:
-    app: istio-namespace-webhook
+    app: kube-graffiti
   ports:
   - protocol: TCP
     port: 443
-    targetPort: 10443
+    targetPort: 8443

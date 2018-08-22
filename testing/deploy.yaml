@@ -1,62 +1,50 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: istio-namespace-webhook
-  namespace: istio-namespace-webhook
+  name: kube-graffiti
+  namespace: kube-graffiti
   labels:
-    app: istio-namespace-webhook
+    app: kube-graffiti
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: istio-namespace-webhook
+      app: kube-graffiti
   template:
     metadata:
       labels:
-        app: istio-namespace-webhook
+        app: kube-graffiti
     spec:
-      serviceAccount: istio-namespace-webhook
+      serviceAccount: kube-graffiti
       containers:
-        - name: istio-namespace-webhook
-          image: istio-namespace-webhook:dev
+        - name: kube-graffiti
+          image: kube-graffiti:dev
           imagePullPolicy: Never
           env:
-            - name: BLACKLIST
-              value: "kube-system default kube-public mantle istio-namespace-webhook davexxx"
-            - name: METRICS_PORT
-              value: "9000"
-            - name: WEBHOOK_PORT
-              value: "10443"
-            - name: LOGLEVEL
+            - name: GRAFFITI_LOG_LEVEL
               value: debug
-            - name: WEBHOOK_CERTFILE
-              value: /tls/server-cert
-            - name: WEBHOOK_KEYFILE
-              value: /tls/server-key
-            - name: WEBHOOK_CAFILE
-              value: /tls/ca-cert
-            - name: CHECK_EXISTING
-              value: "true"
+            - name: GRAFFITI_CHECK_EXISTING
+              value: "false"
           volumeMounts:
           - name: webhook-certs
             mountPath: /tls
           ports:
-            - containerPort: 8080
+            - containerPort: 8443
           livenessProbe:
             httpGet:
               path: /healthz
-              port: 9000
+              port: 8080
             initialDelaySeconds: 15
             periodSeconds: 10
             timeoutSeconds: 3
           readinessProbe:
             httpGet:
               path: /healthz
-              port: 9000
+              port: 8080
             periodSeconds: 10
             timeoutSeconds: 3
       volumes:
       - name: webhook-certs
         secret:
-          secretName: istio-namespace-webhook-certs
+          secretName: kube-graffiti-certs
 

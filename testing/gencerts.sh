@@ -18,7 +18,7 @@
 # reference: https://github.com/kubernetes/kubernetes/blob/master/plugin/pkg/admission/webhook/gencerts.sh
 set -e
 
-CN_BASE="istio-namespace-webhook"
+CN_BASE="kube-graffiti"
 outfile="webhook-tls-secret.yaml"
 
 cat > server.conf << EOF
@@ -39,7 +39,7 @@ openssl req -x509 -new -nodes -key ca-key.pem -days 100000 -out ca-cert.pem -sub
 # Create a server certiticate
 openssl genrsa -out server-key.pem 2048
 # Note the CN is the DNS name of the service of the webhook.
-openssl req -new -key server-key.pem -out server.csr -subj "/CN=istio-namespace-webhook.istio-namespace-webhook.svc" -config server.conf
+openssl req -new -key server-key.pem -out server.csr -subj "/CN=kube-graffiti.kube-graffiti.svc" -config server.conf
 openssl x509 -req -in server.csr -CA ca-cert.pem -CAkey ca-key.pem -CAcreateserial -out server-cert.pem -days 100000 -extensions v3_req -extfile server.conf
 
 # Add the CA to the server cert chain
@@ -65,8 +65,8 @@ cat > $outfile << EOF
 apiVersion: v1
 kind: Secret
 metadata:
-  name: istio-namespace-webhook-certs
-  namespace: istio-namespace-webhook
+  name: kube-graffiti-certs
+  namespace: kube-graffiti
 type: Opaque
 data:
 EOF

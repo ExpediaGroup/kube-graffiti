@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
-	"net/http"
 	"os"
 	"os/signal"
 	"strings"
@@ -38,10 +37,10 @@ var (
 func init() {
 	cobra.OnInitialize(initConfig)
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is /config.yaml)")
-	rootCmd.PersistentFlags().String("log-level", config.DefaultLogLevel, "[GRAFFITI_SERVER_LOG_LEVEL] set logging verbosity to one of panic, fatal, error, warn, info, debug")
-	viper.BindPFlag("server.log-level", rootCmd.PersistentFlags().Lookup("log-level"))
-	rootCmd.PersistentFlags().Bool("check-existing", false, "[GRAFFITTI_SERVER_CHECK_EXISTING] run rules against existing objects")
-	viper.BindPFlag("server.check-existing", rootCmd.PersistentFlags().Lookup("check-existing"))
+	rootCmd.PersistentFlags().String("log-level", config.DefaultLogLevel, "[GRAFFITI_LOG_LEVEL] set logging verbosity to one of panic, fatal, error, warn, info, debug")
+	viper.BindPFlag("log-level", rootCmd.PersistentFlags().Lookup("log-level"))
+	rootCmd.PersistentFlags().Bool("check-existing", false, "[GRAFFITTI_CHECK_EXISTING] run rules against existing objects")
+	viper.BindPFlag("check-existing", rootCmd.PersistentFlags().Lookup("check-existing"))
 
 	// set up Viper environment variable binding...
 	replacer := strings.NewReplacer("-", "_", ".", "_")
@@ -76,7 +75,7 @@ func Execute() {
 
 // runRootCmd is the main program which starts up our services and waits for them to complete
 func runRootCmd(_ *cobra.Command, _ []string) {
-	log.InitLogger(viper.GetString("server.log-level"))
+	log.InitLogger(viper.GetString("log-level"))
 	mylog := log.ComponentLogger(componentName, "runRootCmd")
 
 	config, err := config.ReadConfiguration()
@@ -88,12 +87,11 @@ func runRootCmd(_ *cobra.Command, _ []string) {
 	}
 
 	kubeClient := initKubeClient()
+	// Setup and start the health-checker
+	healthChecker := healthcheck.NewHealthChecker(healthcheck.NewCutDownNamespaceClient(kubeClient), viper.GetInt("health-checker.port"), viper.GetString("health-checker.path"))
+	healthChecker.StartHealthChecker()
 
-	healthcheck.AddHealthCheckHandler(viper.GetString("server.health-path"), kubeClient)
-	if err := initMetricsWebServer(); err != nil {
-		mylog.Fatal().Err(err).Msg("metrics/health server failed to start")
-	}
-
+	// Setup and start the mutating webhook server
 	if err := initWebhookServer(config, kubeClient); err != nil {
 		mylog.Fatal().Err(err).Msg("webhook server failed to start")
 	}
@@ -127,20 +125,6 @@ func initKubeClient() *kubernetes.Clientset {
 	return clientset
 }
 
-func initMetricsWebServer() error {
-	mylog := log.ComponentLogger(componentName, "initMetricsWebServer")
-
-	port := viper.GetInt("server.metrics-port")
-	mylog.Info().Int("metrics-port", port).Msg("starting metrics/health web server")
-	go func() {
-		if err := http.ListenAndServe(fmt.Sprintf(":%d", port), nil); err != nil {
-			mylog.Error().Err(err).Msg("health check webserver failed")
-			panic("healthz webserver failed")
-		}
-	}()
-	return nil
-}
-
 func initWebhookServer(c *config.Configuration, k *kubernetes.Clientset) error {
 	mylog := log.ComponentLogger(componentName, "initWebhookServer")
 	port := viper.GetInt("server.port")
@@ -162,17 +146,10 @@ func initWebhookServer(c *config.Configuration, k *kubernetes.Clientset) error {
 
 	// add each of the graffiti rules into the mux
 	for _, rule := range c.Rules {
-		graffitiRule, err := graffiti.NewRule(
-			rule.Matcher.LabelSelectors,
-			rule.Matcher.FieldSelectors,
-			rule.Matcher.BooleanOperator,
-			rule.Additions.Annotations,
-			rule.Additions.Labels,
-		)
-		if err != nil {
-			return err
-		}
-		server.AddGraffitiRule(*webhook.Path(rule.Registration.Name), graffitiRule)
+		server.AddGraffitiRule(rule.Registration.Name, graffiti.Rule{
+			Matcher:   rule.Matcher,
+			Additions: rule.Additions,
+		})
 		return nil
 	}
 
@@ -184,18 +161,8 @@ func initWebhookServer(c *config.Configuration, k *kubernetes.Clientset) error {
 
 	// register all rules with the kubernetes apiserver
 	for _, rule := range c.Rules {
-		graffitiReg, err := webhook.NewRegistration(
-			rule.Registration.Name,
-			[]webhook.Target(rule.Registration.Targets),
-			rule.Registration.NamespaceSelector,
-			rule.Registration.FailurePolicy,
-		)
-		if err != nil {
-			mylog.Error().Err(err).Str("name", rule.Registration.Name).Msg("failed to create registration")
-			return err
-		}
 		mylog.Info().Str("name", rule.Registration.Name).Msg("registering rule with api server")
-		err = server.RegisterHook(*webhook.Path(rule.Registration.Name), graffitiReg, k)
+		err = server.RegisterHook(rule.Registration.Name, rule.Registration, k)
 		if err != nil {
 			mylog.Error().Err(err).Str("name", rule.Registration.Name).Msg("failed to register rule with apiserver")
 			return err

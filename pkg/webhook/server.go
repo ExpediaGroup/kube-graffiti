@@ -5,6 +5,8 @@ import (
 	"crypto/x509"
 	"fmt"
 	"net/http"
+	"net/url"
+	"strings"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -45,7 +47,8 @@ func NewServer(cd, ns, svc string, ca []byte, k *kubernetes.Clientset, port int)
 }
 
 // AddGraffitiRule provides a way of adding new rules into the http mux and corresponding handler context map
-func (s Server) AddGraffitiRule(path string, rule graffiti.Rule) {
+func (s Server) AddGraffitiRule(name string, rule graffiti.Rule) {
+	path := sanitizePath(name)
 	mux := s.httpServer.Handler.(*http.ServeMux)
 	mux.Handle(path, s.handler)
 	s.handler.addRule(path, rule)
@@ -95,4 +98,11 @@ func getAPIServerCert(clientset *kubernetes.Clientset) []byte {
 	}
 	mylog.Debug().Str("client-ca", pem).Msg("client ca loaded")
 	return []byte(pem)
+}
+
+func sanitizePath(name string) string {
+	mylog := log.ComponentLogger(componentName, "Path")
+	path := strings.Join([]string{pathPrefix, url.PathEscape(name)}, "/")
+	mylog.Debug().Str("path", path).Msg("Generated webhook path")
+	return path
 }
