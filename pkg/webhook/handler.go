@@ -37,7 +37,7 @@ func (h graffitiHandler) addRule(path string, rule graffitiMutator) {
 // ServeHTTP performs the basic validation that we received a valid AdmissionReview request.
 // It looks up the graffiti tag associated with a given webhook path (the URL) and calls its 'mutate' method to
 func (h graffitiHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	url := r.URL.String()
+	url := r.URL.Path
 	mylog := log.ComponentLogger(componentName, "graffitiHandler-ServeHTTP")
 	reqLog := mylog.With().Str("url", url).Str("host", r.Host).Str("method", r.Method).Str("ua", r.UserAgent()).Str("remote", r.RemoteAddr).Logger()
 	reqLog.Debug().Msg("webhook triggered, performing the mutating admission review")
@@ -84,13 +84,13 @@ func (h graffitiHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	reviewResponse := &admission.AdmissionResponse{}
 	// check that we have a Graffiti matching this URL path...
-	if val, ok := h.tagmap[url]; !ok {
+	if mutator, ok := h.tagmap[url]; !ok {
 		reqLog.Error().Str("path", url).Msg("can't find a grafitti rule for path")
 		reviewResponse.Allowed = true
 	} else {
 		reqLog.Debug().Str("path", url).Msg("found a graffiti rule for path")
 		// call the Mutate method associated with this rule
-		reviewResponse = val.Mutate(ar.Request)
+		reviewResponse = mutator.Mutate(ar.Request)
 	}
 
 	response := admission.AdmissionReview{}

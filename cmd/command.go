@@ -30,12 +30,10 @@ var (
 		Long:  "Write rules that match labels and object fields and add labels/annotations to kubernetes objects as they are created via a mutating webhook.",
 		Run:   runRootCmd,
 	}
-	defaultConfigPath = "/config"
 )
 
 // init defines command-line and environment arguments
 func init() {
-	cobra.OnInitialize(initConfig)
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is /config.yaml)")
 	rootCmd.PersistentFlags().String("log-level", config.DefaultLogLevel, "[GRAFFITI_LOG_LEVEL] set logging verbosity to one of panic, fatal, error, warn, info, debug")
 	viper.BindPFlag("log-level", rootCmd.PersistentFlags().Lookup("log-level"))
@@ -47,23 +45,6 @@ func init() {
 	viper.SetEnvPrefix("GRAFFITI_")
 	viper.SetEnvKeyReplacer(replacer)
 	viper.AutomaticEnv()
-	config.SetDefaults()
-}
-
-// initConfig is reponsible for loading the viper configuration file.
-func initConfig() {
-	// Don't forget to read config either from cfgFile or from home directory!
-	if cfgFile != "" {
-		// Use config file from the flag.
-		viper.SetConfigFile(cfgFile)
-	} else {
-		viper.SetConfigName(defaultConfigPath)
-	}
-
-	if err := viper.ReadInConfig(); err != nil {
-		fmt.Println("Can't read config:", err)
-		os.Exit(1)
-	}
 }
 
 func Execute() {
@@ -75,17 +56,25 @@ func Execute() {
 
 // runRootCmd is the main program which starts up our services and waits for them to complete
 func runRootCmd(_ *cobra.Command, _ []string) {
-	log.InitLogger(viper.GetString("log-level"))
+	log.InitLogger("info")
 	mylog := log.ComponentLogger(componentName, "runRootCmd")
 
-	config, err := config.ReadConfiguration()
+	mylog.Info().Str("file", cfgFile).Msg("reading configuration file")
+	config, err := config.ReadConfiguration(cfgFile)
 	if err != nil {
 		mylog.Fatal().Err(err).Msg("failed to load config")
 	}
+	mylog.Info().Str("level", viper.GetString("log-level")).Msg("Setting log-level to configured level")
+	log.ChangeLogLevel(viper.GetString("log-level"))
+	mylog = log.ComponentLogger(componentName, "runRootCmd")
+
+	mylog.Info().Msg("configuration read ok")
+	mylog.Debug().Msg("validating config")
 	if err := config.ValidateConfig(); err != nil {
 		mylog.Fatal().Err(err).Msg("failed to validate config")
 	}
 
+	mylog.Debug().Msg("getting kubernetes client")
 	kubeClient := initKubeClient()
 	// Setup and start the health-checker
 	healthChecker := healthcheck.NewHealthChecker(healthcheck.NewCutDownNamespaceClient(kubeClient), viper.GetInt("health-checker.port"), viper.GetString("health-checker.path"))
@@ -130,12 +119,13 @@ func initWebhookServer(c *config.Configuration, k *kubernetes.Clientset) error {
 	port := viper.GetInt("server.port")
 
 	mylog.Debug().Int("port", port).Msg("creating a new webhook server")
-	caPath := viper.GetString("server.ca-path")
+	caPath := viper.GetString("server.ca-cert-path")
 	ca, err := ioutil.ReadFile(caPath)
 	if err != nil {
 		mylog.Error().Err(err).Str("path", caPath).Msg("Failed to load ca from file")
 		return errors.New("failed to load ca from file")
 	}
+	mylog.Debug().Str("ca-cert-path", caPath).Msg("loaded ca cert ok")
 	server := webhook.NewServer(
 		viper.GetString("server.company-domain"),
 		viper.GetString("server.namespace"),
@@ -145,15 +135,16 @@ func initWebhookServer(c *config.Configuration, k *kubernetes.Clientset) error {
 	)
 
 	// add each of the graffiti rules into the mux
+	mylog.Info().Int("count", len(c.Rules)).Msg("loading graffiti rules")
 	for _, rule := range c.Rules {
+		mylog.Info().Str("rule-name", rule.Registration.Name).Msg("adding graffiti rule")
 		server.AddGraffitiRule(rule.Registration.Name, graffiti.Rule{
 			Matcher:   rule.Matcher,
 			Additions: rule.Additions,
 		})
-		return nil
 	}
 
-	mylog.Info().Int("port", port).Msg("starting webhook secure webserver")
+	mylog.Info().Int("port", port).Str("server.cert-path", viper.GetString("server.cert-path")).Str("server.key-path", viper.GetString("server.key-path")).Msg("starting webhook secure webserver")
 	server.StartWebhookServer(viper.GetString("server.cert-path"), viper.GetString("server.key-path"))
 
 	mylog.Debug().Msg("waiting 2 seconds")
@@ -162,7 +153,7 @@ func initWebhookServer(c *config.Configuration, k *kubernetes.Clientset) error {
 	// register all rules with the kubernetes apiserver
 	for _, rule := range c.Rules {
 		mylog.Info().Str("name", rule.Registration.Name).Msg("registering rule with api server")
-		err = server.RegisterHook(rule.Registration.Name, rule.Registration, k)
+		err = server.RegisterHook(rule.Registration, k)
 		if err != nil {
 			mylog.Error().Err(err).Str("name", rule.Registration.Name).Msg("failed to register rule with apiserver")
 			return err

@@ -6,12 +6,16 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"strings"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"stash.hcom/run/kube-graffiti/pkg/graffiti"
 	"stash.hcom/run/kube-graffiti/pkg/log"
+)
+
+const (
+	componentName = "webhook"
+	pathPrefix    = "/graffiti/"
 )
 
 type Server struct {
@@ -29,7 +33,9 @@ func NewServer(cd, ns, svc string, ca []byte, k *kubernetes.Clientset, port int)
 	mylog := log.ComponentLogger(componentName, "NewServer")
 	mylog.Debug().Int("port", port).Msg("creating a new webhook server")
 
+	mylog.Debug().Msg("creating a new http mux")
 	mux := http.NewServeMux()
+	mylog.Info().Msg("configuring http tls configuration")
 	tls := configTLS(k)
 	server := &http.Server{
 		Addr:      fmt.Sprintf(":%d", port),
@@ -48,7 +54,7 @@ func NewServer(cd, ns, svc string, ca []byte, k *kubernetes.Clientset, port int)
 
 // AddGraffitiRule provides a way of adding new rules into the http mux and corresponding handler context map
 func (s Server) AddGraffitiRule(name string, rule graffiti.Rule) {
-	path := sanitizePath(name)
+	path := pathFromName(name)
 	mux := s.httpServer.Handler.(*http.ServeMux)
 	mux.Handle(path, s.handler)
 	s.handler.addRule(path, rule)
@@ -57,7 +63,7 @@ func (s Server) AddGraffitiRule(name string, rule graffiti.Rule) {
 // StartWebhookServer starts the webhook server with TLS encryption
 func (s Server) StartWebhookServer(certPath, keyPath string) {
 	mylog := log.ComponentLogger(componentName, "StartWebhookSecureServer")
-	mylog.Info().Str("certPath", certPath).Str("keyPath", keyPath).Msg("starting the secure webhook http server...")
+	mylog.Debug().Str("certPath", certPath).Str("keyPath", keyPath).Msg("starting the secure webhook http server...")
 
 	// start the webhook server in a new routine
 	var err error
@@ -71,6 +77,9 @@ func (s Server) StartWebhookServer(certPath, keyPath string) {
 }
 
 func configTLS(clientset *kubernetes.Clientset) *tls.Config {
+	mylog := log.ComponentLogger(componentName, "configTLS")
+	mylog.Debug().Msg("calling kubernetes api to retrieve the CA certificate")
+
 	cert := getAPIServerCert(clientset)
 	apiserverCA := x509.NewCertPool()
 	apiserverCA.AppendCertsFromPEM(cert)
@@ -100,9 +109,9 @@ func getAPIServerCert(clientset *kubernetes.Clientset) []byte {
 	return []byte(pem)
 }
 
-func sanitizePath(name string) string {
+func pathFromName(name string) string {
 	mylog := log.ComponentLogger(componentName, "Path")
-	path := strings.Join([]string{pathPrefix, url.PathEscape(name)}, "/")
+	path := pathPrefix + url.PathEscape(name)
 	mylog.Debug().Str("path", path).Msg("Generated webhook path")
 	return path
 }

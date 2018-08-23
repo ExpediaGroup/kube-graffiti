@@ -63,20 +63,22 @@ func (r Rule) Mutate(req *admission.AdmissionRequest) *admission.AdmissionRespon
 	)
 
 	if err := json.Unmarshal(req.Object.Raw, &metaObject); err != nil {
-		mylog.Error().Err(err).Msg("failed to unmarshal generic object metadata from the admission request")
-		return admissionResponseError(err)
+		return admissionResponseError(fmt.Errorf("failed to unmarshal generic object metadata from the admission request: %v", err))
 	}
 
 	if len(r.Matcher.LabelSelectors) == 0 && len(r.Matcher.FieldSelectors) == 0 {
+		mylog.Debug().Msg("rule does not contain any label or field selectors so it matches ALL")
 		paintIt = true
 	} else {
 		// match against all of the label selectors
+		mylog.Debug().Int("count", len(r.Matcher.LabelSelectors)).Msg("matching against label selectors")
 		labelMatches, err = r.matchLabelSelectors(metaObject)
 		if err != nil {
 			return admissionResponseError(err)
 		}
 
 		// test if we match any field selectors
+		mylog.Debug().Int("count", len(r.Matcher.FieldSelectors)).Msg("matching against field selectors")
 		fieldMatches, err = r.matchFieldSelectors(req.Object.Raw)
 		if err != nil {
 			return admissionResponseError(err)
@@ -108,9 +110,16 @@ func (r Rule) Mutate(req *admission.AdmissionRequest) *admission.AdmissionRespon
 
 	if !paintIt {
 		mylog.Info().Str("name", metaObject.Meta.Name).Str("namespace", metaObject.Meta.Namespace).Msg("rules did not match, no modifications made")
+		return &admission.AdmissionResponse{
+			Allowed: true,
+			Result: &metav1.Status{
+				Message: "rules did not match, no modifications made",
+			},
+		}
 		return admissionResponseError(fmt.Errorf("rules did not match, object not updated"))
 	}
 
+	mylog.Info().Str("name", metaObject.Meta.Name).Str("namespace", metaObject.Meta.Namespace).Msg("rules match, painting object")
 	return r.paintObject(metaObject)
 }
 
@@ -203,6 +212,8 @@ func matchFieldSelector(selector string, target map[string]string) (bool, error)
 }
 
 func admissionResponseError(err error) *admission.AdmissionResponse {
+	mylog := log.ComponentLogger(componentName, "admissionResponseError")
+	mylog.Error().Err(err).Msg("admission response error, skipping any modification")
 	return &admission.AdmissionResponse{
 		Allowed: true,
 		Result: &metav1.Status{
@@ -217,7 +228,7 @@ func (r Rule) paintObject(object metaObject) *admission.AdmissionResponse {
 	reviewResponse.Allowed = true
 
 	if len(r.Additions.Labels) == 0 && len(r.Additions.Annotations) == 0 {
-		return admissionResponseError(fmt.Errorf("rule does contain any labels or annotations to add"))
+		return admissionResponseError(fmt.Errorf("graffiti rule has no additional labels or annotations"))
 	}
 	patch, err := r.createObjectPatch(object)
 	if err != nil {

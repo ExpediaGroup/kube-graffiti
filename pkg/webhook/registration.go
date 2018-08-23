@@ -27,7 +27,7 @@ type Target struct {
 }
 
 // RegisterHook registers our webhook as MutatingWebhook with the kubernetes api.
-func (s Server) RegisterHook(path string, r Registration, clientset *kubernetes.Clientset) error {
+func (s Server) RegisterHook(r Registration, clientset *kubernetes.Clientset) error {
 	mylog := log.ComponentLogger(componentName, "RegisterHook")
 
 	selector, err := metav1.ParseToLabelSelector(r.NamespaceSelector)
@@ -64,6 +64,7 @@ func (s Server) RegisterHook(path string, r Registration, clientset *kubernetes.
 		})
 	}
 
+	path := pathFromName(r.Name)
 	webhookConfig := &admissionreg.MutatingWebhookConfiguration{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: r.Name,

@@ -35,46 +35,45 @@ func makeFieldMap(raw []byte) (map[string]string, error) {
 
 func addFieldRecursive(fm map[string]string, prefix, k string, v interface{}) {
 	mylog := log.ComponentLogger(componentName, "addFieldRecursive")
-	reclog := mylog.With().Str("prefix", prefix).Logger()
 
 	if reflect.ValueOf(k).Kind() != reflect.String {
-		reclog.Debug().Msg("key is not a string")
+		mylog.Debug().Msg("key is not a string")
 		return
 	}
 
 	if reflect.TypeOf(v) == nil {
-		reclog.Debug().Str("key", k).Str("value", "").Msg("adding empty value to fieldmap")
+		mylog.Debug().Str("key", prefix+k).Str("value", "").Msg("adding empty value to fieldmap")
 		fm[prefix+k] = ""
 		return
 	}
 
 	if reflect.TypeOf(v).String() == "json.Number" {
-		reclog.Debug().Str("key", k).Str("value", v.(json.Number).String()).Msg("adding json number to fieldmap")
+		mylog.Debug().Str("key", prefix+k).Str("value", v.(json.Number).String()).Msg("adding json number to fieldmap")
 		fm[prefix+k] = v.(json.Number).String()
 		return
 	}
 
 	switch reflect.ValueOf(v).Kind() {
 	case reflect.String:
-		reclog.Debug().Str("key", k).Str("value", v.(string)).Msg("adding string to fieldmap")
+		mylog.Debug().Str("key", prefix+k).Str("value", v.(string)).Msg("adding string to fieldmap")
 		fm[prefix+k] = v.(string)
 		return
 	case reflect.Bool:
-		reclog.Debug().Str("key", k).Bool("value", v.(bool)).Msg("adding bool to fieldmap")
+		mylog.Debug().Str("key", prefix+k).Bool("value", v.(bool)).Msg("adding bool to fieldmap")
 		fm[prefix+k] = strconv.FormatBool(v.(bool))
 		return
 	case reflect.Slice:
-		reclog.Debug().Str("key", k).Msg("adding slice to fieldmap")
+		mylog.Debug().Str("key", prefix+k).Msg("adding slice to fieldmap")
 		for i, val := range v.([]interface{}) {
 			addFieldRecursive(fm, prefix+k+".", strconv.Itoa(i), val)
 		}
 	case reflect.Map:
-		reclog.Debug().Str("key", k).Msg("adding map to fieldmap")
+		mylog.Debug().Str("key", k).Msg("adding map to fieldmap")
 		for x, y := range v.(map[string]interface{}) {
 			addFieldRecursive(fm, prefix+k+".", x, y)
 		}
 	default:
-		reclog.Debug().Str("key", k).Str("kind", reflect.ValueOf(v).Kind().String()).Msg("can't handle kind")
+		mylog.Debug().Str("key", prefix+k).Str("kind", reflect.ValueOf(v).Kind().String()).Msg("can't handle kind")
 	}
 	return
 }

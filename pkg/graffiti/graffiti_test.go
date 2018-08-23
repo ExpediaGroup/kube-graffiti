@@ -8,7 +8,55 @@ import (
 	"github.com/davecgh/go-spew/spew"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	admission "k8s.io/api/admission/v1beta1"
 )
+
+const testReview = `{  
+	"kind":"AdmissionReview",
+	"apiVersion":"admission.k8s.io/v1beta1",
+	"request":{  
+	   "uid":"69f7d25a-963e-11e8-a77c-08002753edac",
+	   "kind":{  
+		  "group":"",
+		  "version":"v1",
+		  "kind":"Namespace"
+	   },
+	   "resource":{  
+		  "group":"",
+		  "version":"v1",
+		  "resource":"namespaces"
+	   },
+	   "operation":"CREATE",
+	   "userInfo":{  
+		  "username":"minikube-user",
+		  "groups":[  
+			 "system:masters",
+			 "system:authenticated"
+		  ]
+	   },
+	   "object":{  
+		  "metadata":{  
+			 "name":"test-namespace",
+			 "creationTimestamp":null,
+			 "labels":{
+				 "author": "david",
+				 "group": "runtime"
+			 },
+			 "annotations":{
+				 "level": "v.special",
+				 "prometheus.io/path": "/metrics"
+			 }
+		  },
+		  "spec":{  
+ 
+		  },
+		  "status":{  
+			 "phase":"Active"
+		  }
+	   },
+	   "oldObject":null
+	}
+ }`
 
 func TestReviewObjectDoesNotHaveMetaData(t *testing.T) {
 	rule := Rule{Matcher: Matcher{LabelSelectors: []string{"author = stephen"}}}
@@ -56,7 +104,7 @@ func TestReviewObjectDoesNotHaveMetaData(t *testing.T) {
 	assert.NotNil(t, resp)
 	assert.Equal(t, true, resp.Allowed, "failed rules should not block the source api request")
 	assert.Nil(t, resp.Patch, "there shouldn't be patch")
-	assert.Equal(t, "rules did not match, object not updated", resp.Result.Message)
+	assert.Equal(t, "rules did not match, no modifications made", resp.Result.Message)
 }
 
 func TestNoSelectorsMeansMatchEverything(t *testing.T) {

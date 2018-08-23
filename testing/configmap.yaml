@@ -1,0 +1,57 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kube-graffiti-config
+  namespace: kube-graffiti
+data:
+  graffiti-config.yaml: |
+    log-level: info
+    check-existing: false
+    health-checker:
+      port: 9999
+      path: /am-i-healthy
+    server:
+      port: 8443
+      namespace: kube-graffiti
+      service: kube-graffiti
+      ca-cert-path: /tls/ca-cert
+      cert-path: /tls/server-cert
+      key-path: /tls/server-key
+    rules:
+    - registration:
+        name: label-namespaces-called-dave
+        namespace-selector:
+        failure-policy: Fail
+        targets:
+        - api-groups:
+          - ""
+          api-versions:
+          - v1
+          resources:
+          - namespaces
+      matcher:
+        label-selectors:
+        - "name=dave"
+        - "dave=true"
+        field-selectors:
+        - "metadata.name=dave"
+        boolean-operator: OR
+      additions:
+        labels:
+          result: "this_is_indeed_daveish"
+    - registration:
+        name: annotate-all-core-objects-except-anything-in-kube-system
+        failure-policy: Ignore
+        targets:
+        - api-groups:
+          - ""
+          api-versions:
+          - "*"
+          resources:
+          - "*"
+      matcher:
+        field-selectors:
+        -  "metadata.namespace!=kube-system"
+      additions:
+        annotations:
+          graffiti: "woz_er_2018"

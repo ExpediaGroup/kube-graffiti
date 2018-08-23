@@ -27,6 +27,13 @@ func InitLogger(level string) {
 	zerolog.SetGlobalLevel(LogLevels[level])
 }
 
+// ChangeLogLevel allows the changing of the global log level
+func ChangeLogLevel(level string) {
+	// set level width if PR https://github.com/rs/zerolog/pull/87 is accepted
+	// zerolog.LevelWidth = 5
+	zerolog.SetGlobalLevel(LogLevels[level])
+}
+
 func ComponentLogger(component, funcname string) zerolog.Logger {
 	logger := log.Logger.With().Str("component", component).Logger()
 	if zerolog.GlobalLevel() == zerolog.DebugLevel {

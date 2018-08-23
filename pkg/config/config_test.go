@@ -55,7 +55,7 @@ rules:
       resources:
       - "*"
   matcher:
-    field-selector:
+    field-selectors:
     -  "metadata.namespace != kube-system"
   additions:
     annotations:
@@ -63,9 +63,6 @@ rules:
 `
 
 func TestParseConfig(t *testing.T) {
-	// set the defaults
-	SetDefaults()
-
 	// read viper config from our test config file
 	viper.SetConfigType("yaml")
 	err := viper.ReadConfig(bytes.NewBuffer([]byte(testConfig)))

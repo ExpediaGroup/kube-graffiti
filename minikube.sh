@@ -1,6 +1,6 @@
 #!/bin/bash -ue
 
-NAMESPACE=default
+NAMESPACE=kube-graffiti
 DEPLOYNAME=kube-graffiti
 
 minikube_running() {
@@ -63,7 +63,7 @@ if [[ ! -f "./${kubectlbin}" ]]; then
   download_kubectl ${kubectlbin} ${kubectl_version} ${codebase}
 fi
 
-for template in namespace clusterrole serviceaccount clusterrolebinding service webhook-tls-secret
+for template in namespace clusterrole serviceaccount clusterrolebinding service webhook-tls-secret configmap
 do
   [[ -f "testing/${template}.yaml" ]] && ./$kubectlbin apply -f testing/${template}.yaml
 done
