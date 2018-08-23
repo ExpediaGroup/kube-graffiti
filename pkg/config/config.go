@@ -46,18 +46,9 @@ type Rule struct {
 	Additions    graffiti.Additions   `mapstructure:"additions"`
 }
 
-// initConfig is reponsible for loading the viper configuration file.
-func initViper(file string) {
-	viper.SetDefault("log-level", DefaultLogLevel)
-	viper.SetDefault("check-existing", false)
-	viper.SetDefault("server.metrics-port", 8080)
-	viper.SetDefault("server.port", 8443)
-	viper.SetDefault("health-checker.port", 8080)
-	viper.SetDefault("health-checker.health-path", "/healthz")
-	viper.SetDefault("server.company-domain", "acme.com")
-	viper.SetDefault("server.ca-cert-path", "/ca.pem")
-	viper.SetDefault("server.cert-path", "/server.pem")
-	viper.SetDefault("server.cert-path", "/key.pem")
+// LoadConfig is reponsible for loading the viper configuration file.
+func LoadConfig(file string) (*Configuration, error) {
+	setDefaults()
 
 	// Don't forget to read config either from cfgFile or from home directory!
 	if file != "" {
@@ -71,22 +62,45 @@ func initViper(file string) {
 		fmt.Println("Can't read config:", err)
 		os.Exit(1)
 	}
+
+	return unmarshalFromViperStrict()
 }
 
-func ReadConfiguration(file string) (*Configuration, error) {
-	var c Configuration
-	initViper(file)
+func setDefaults() {
+	viper.SetDefault("log-level", DefaultLogLevel)
+	viper.SetDefault("check-existing", false)
+	viper.SetDefault("server.port", 8443)
+	viper.SetDefault("health-checker.port", 8080)
+	viper.SetDefault("health-checker.path", "/healthz")
+	viper.SetDefault("server.company-domain", "acme.com")
+	viper.SetDefault("server.ca-cert-path", "/ca.pem")
+	viper.SetDefault("server.cert-path", "/server.pem")
+	viper.SetDefault("server.cert-path", "/key.pem")
+}
 
+func unmarshalFromViperStrict() (*Configuration, error) {
+	var c Configuration
+	// add in a special decoder so that viper can unmarshal boolean operator values such as AND, OR and XOR
+	// and enable mapstructure's ErrorUnused checking so we can catch bad configuration keys in the source.
 	decoderHookFunc := mapstructure.ComposeDecodeHookFunc(
 		mapstructure.StringToTimeDurationHookFunc(),
 		mapstructure.StringToSliceHookFunc(","),
+		graffiti.StringToBooleanOperatorFunc(),
 	)
-	opts := viper.DecodeHook(decoderHookFunc)
+	opts := decodeHookWithErrorUnused(decoderHookFunc)
 
 	if err := viper.Unmarshal(&c, opts); err != nil {
-		return &c, fmt.Errorf("Failed to marshal configuration: %v", err)
+		return &c, fmt.Errorf("Failed to unmarshal configuration: %v", err)
 	}
 	return &c, nil
+}
+
+// Our own implementation of Viper's DecodeHook so that we can set ErrorUnused to true
+func decodeHookWithErrorUnused(hook mapstructure.DecodeHookFunc) viper.DecoderConfigOption {
+	return func(c *mapstructure.DecoderConfig) {
+		c.DecodeHook = hook
+		c.ErrorUnused = true
+	}
 }
 
 // ValidateConfig is responsible for throwing errors when the configuration is bad.

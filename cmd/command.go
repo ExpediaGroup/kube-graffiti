@@ -60,7 +60,7 @@ func runRootCmd(_ *cobra.Command, _ []string) {
 	mylog := log.ComponentLogger(componentName, "runRootCmd")
 
 	mylog.Info().Str("file", cfgFile).Msg("reading configuration file")
-	config, err := config.ReadConfiguration(cfgFile)
+	config, err := config.LoadConfig(cfgFile)
 	if err != nil {
 		mylog.Fatal().Err(err).Msg("failed to load config")
 	}

@@ -8,7 +8,7 @@ import (
 
 // StringToBooleanOperatorFunc allows mapstructure to map string representations of
 // BooleanOperators to their enum type values
-func StringToBooleanOperatorFunc(layout string) mapstructure.DecodeHookFunc {
+func StringToBooleanOperatorFunc() mapstructure.DecodeHookFunc {
 	return func(
 		f reflect.Type,
 		t reflect.Type,
