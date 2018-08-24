@@ -53,8 +53,8 @@ func NewServer(cd, ns, svc string, ca []byte, k *kubernetes.Clientset, port int)
 }
 
 // AddGraffitiRule provides a way of adding new rules into the http mux and corresponding handler context map
-func (s Server) AddGraffitiRule(name string, rule graffiti.Rule) {
-	path := pathFromName(name)
+func (s Server) AddGraffitiRule(rule graffiti.Rule) {
+	path := pathFromName(rule.Name)
 	mux := s.httpServer.Handler.(*http.ServeMux)
 	mux.Handle(path, s.handler)
 	s.handler.addRule(path, rule)

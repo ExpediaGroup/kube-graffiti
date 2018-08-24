@@ -107,10 +107,18 @@ func decodeHookWithErrorUnused(hook mapstructure.DecodeHookFunc) viper.DecoderCo
 func (c *Configuration) ValidateConfig() error {
 	mylog := log.ComponentLogger(componentName, "ValidateConfig")
 	mylog.Debug().Msg("validating configuration")
+
+	if err := c.validateLogArgs(); err != nil {
+		return err
+	}
 	if err := c.validateWebhookArgs(); err != nil {
 		return err
 	}
-	return c.validateLogArgs()
+	if err := c.validateRules(); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // validateLogArgs check that a requested log-level is defined/allowed.
@@ -131,6 +139,50 @@ func (c *Configuration) validateWebhookArgs() error {
 		if !viper.IsSet(p) {
 			mylog.Error().Str("parameter", p).Msg("missing required parameter value")
 			return fmt.Errorf("missing required parameter")
+		}
+	}
+	return nil
+}
+
+func (c *Configuration) validateRules() error {
+	mylog := log.ComponentLogger(componentName, "validateRules")
+	mylog.Debug().Msg("validating graffiti rules")
+
+	existingRuleNames := make(map[string]bool)
+	for _, rule := range c.Rules {
+		rulelog := mylog.With().Str("rule", rule.Registration.Name).Logger()
+
+		// rules need to contain one or more label or annotation additions...
+		if len(rule.Additions.Labels) == 0 && len(rule.Additions.Annotations) == 0 {
+			rulelog.Error().Msg("invalid rule - it does not contain any additional labels or annotations")
+			return fmt.Errorf("rule %s is invalid - it does not contain any additional labels or annotations", rule.Registration.Name)
+		}
+
+		// rules can't have duplicate names...
+		if _, set := existingRuleNames[rule.Registration.Name]; set == true {
+			rulelog.Error().Msg("found duplicate rules with the same name, they must be unique")
+			return fmt.Errorf("rule %s is invalid - found duplicate rules with the same name, they must be unique", rule.Registration.Name)
+		}
+		existingRuleNames[rule.Registration.Name] = true
+
+		// all label selectors must be valid...
+		if len(rule.Matcher.LabelSelectors) > 0 {
+			for _, selector := range rule.Matcher.LabelSelectors {
+				if err := graffiti.ValidateLabelSelector(selector); err != nil {
+					rulelog.Error().Str("label-selector", selector).Msg("rule contains an invalid label selector")
+					return fmt.Errorf("rule %s is invalid - contains invalid label selector '%s': %v", rule.Registration.Name, selector, err)
+				}
+			}
+		}
+
+		// all field selectors must also be valid...
+		if len(rule.Matcher.FieldSelectors) > 0 {
+			for _, selector := range rule.Matcher.FieldSelectors {
+				if err := graffiti.ValidateFieldSelector(selector); err != nil {
+					rulelog.Error().Str("field-selector", selector).Msg("rule contains an invalid field selector")
+					return fmt.Errorf("rule %s is invalid - contains invalid field selector '%s': %v", rule.Registration.Name, selector, err)
+				}
+			}
 		}
 	}
 	return nil

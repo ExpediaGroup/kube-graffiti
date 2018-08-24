@@ -7,6 +7,7 @@ import (
 
 	// "github.com/davecgh/go-spew/spew"
 
+	"github.com/rs/zerolog"
 	admission "k8s.io/api/admission/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
@@ -29,12 +30,15 @@ const (
 )
 
 // Rule contains a single graffiti rule and contains matchers for choosing which objects to change and additions which are the fields we want to add.
+// It does not have mapstructure tags because it is not directly marshalled from config
 type Rule struct {
-	Matcher   Matcher   `mapstructure:"matcher"`
-	Additions Additions `mapstructure:"additions"`
+	Name      string
+	Matcher   Matcher
+	Additions Additions
 }
 
 // Matcher manages the rules of matching an object
+// This type is directly marshalled from config and so has mapstructure tags
 type Matcher struct {
 	LabelSelectors  []string        `mapstructure:"label-selectors"`
 	FieldSelectors  []string        `mapstructure:"field-selectors"`
@@ -42,6 +46,7 @@ type Matcher struct {
 }
 
 // Additions contains the additional fields that we want to insert into the object
+// This type is directly marshalled from config and so has mapstructure tags
 type Additions struct {
 	Annotations map[string]string `mapstructure:"annotations"`
 	Labels      map[string]string `mapstructure:"labels"`
@@ -54,6 +59,7 @@ type metaObject struct {
 
 func (r Rule) Mutate(req *admission.AdmissionRequest) *admission.AdmissionResponse {
 	mylog := log.ComponentLogger(componentName, "Mutate")
+	mylog = mylog.With().Str("rule", r.Name).Str("kind", req.Kind.String()).Str("name", req.Name).Str("namespace", req.Namespace).Logger()
 	var (
 		paintIt      = false
 		labelMatches = false
@@ -64,6 +70,13 @@ func (r Rule) Mutate(req *admission.AdmissionRequest) *admission.AdmissionRespon
 
 	if err := json.Unmarshal(req.Object.Raw, &metaObject); err != nil {
 		return admissionResponseError(fmt.Errorf("failed to unmarshal generic object metadata from the admission request: %v", err))
+	}
+	// make sure that name and namespace fields are populated in the metadata object
+	if req.Name != "" {
+		metaObject.Meta.Name = req.Name
+	}
+	if req.Namespace != "" {
+		metaObject.Meta.Namespace = req.Namespace
 	}
 
 	if len(r.Matcher.LabelSelectors) == 0 && len(r.Matcher.FieldSelectors) == 0 {
@@ -79,7 +92,7 @@ func (r Rule) Mutate(req *admission.AdmissionRequest) *admission.AdmissionRespon
 
 		// test if we match any field selectors
 		mylog.Debug().Int("count", len(r.Matcher.FieldSelectors)).Msg("matching against field selectors")
-		fieldMatches, err = r.matchFieldSelectors(req.Object.Raw)
+		fieldMatches, err = r.matchFieldSelectors(req)
 		if err != nil {
 			return admissionResponseError(err)
 		}
@@ -109,18 +122,17 @@ func (r Rule) Mutate(req *admission.AdmissionRequest) *admission.AdmissionRespon
 	mylog.Debug().Bool("matches", paintIt).Msg("result of boolean operator match on selectors")
 
 	if !paintIt {
-		mylog.Info().Str("name", metaObject.Meta.Name).Str("namespace", metaObject.Meta.Namespace).Msg("rules did not match, no modifications made")
+		mylog.Info().Msg("rule didn't match")
 		return &admission.AdmissionResponse{
 			Allowed: true,
 			Result: &metav1.Status{
-				Message: "rules did not match, no modifications made",
+				Message: "rule didn't match",
 			},
 		}
-		return admissionResponseError(fmt.Errorf("rules did not match, object not updated"))
 	}
 
-	mylog.Info().Str("name", metaObject.Meta.Name).Str("namespace", metaObject.Meta.Namespace).Msg("rules match, painting object")
-	return r.paintObject(metaObject)
+	mylog.Info().Msg("rule matched - painting object")
+	return r.paintObject(metaObject, mylog)
 }
 
 func (r Rule) matchLabelSelectors(object metaObject) (bool, error) {
@@ -131,6 +143,7 @@ func (r Rule) matchLabelSelectors(object metaObject) (bool, error) {
 		if len(object.Meta.Labels) == 0 {
 			object.Meta.Labels = make(map[string]string)
 		}
+		// make it so we can use name and namespace as label selectors
 		object.Meta.Labels["name"] = object.Meta.Name
 		object.Meta.Labels["namespace"] = object.Meta.Namespace
 
@@ -169,12 +182,28 @@ func matchLabelSelector(selector string, target map[string]string) (bool, error)
 	return true, nil
 }
 
-func (r Rule) matchFieldSelectors(raw []byte) (bool, error) {
+// ValidateLabelSelector checks that a label selector parses correctly and is used when validating config
+func ValidateLabelSelector(selector string) error {
+	if _, err := labels.Parse(selector); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (r Rule) matchFieldSelectors(req *admission.AdmissionRequest) (bool, error) {
 	mylog := log.ComponentLogger(componentName, "matchFieldSelectors")
 	if len(r.Matcher.FieldSelectors) != 0 {
-		fieldMap, err := makeFieldMap(raw)
+		fieldMap, err := makeFieldMap(req.Object.Raw)
 		if err != nil {
 			return false, err
+		}
+
+		// make sure that metadata.name and metadata.namespace are populated from req object
+		if req.Name != "" {
+			fieldMap["metadata.name"] = req.Name
+		}
+		if req.Namespace != "" {
+			fieldMap["metadata.namespace"] = req.Namespace
 		}
 
 		for _, selector := range r.Matcher.FieldSelectors {
@@ -211,6 +240,14 @@ func matchFieldSelector(selector string, target map[string]string) (bool, error)
 	return true, nil
 }
 
+// ValidateFieldSelector checks that a field selector parses correctly and is used when validating config
+func ValidateFieldSelector(selector string) error {
+	if _, err := fields.ParseSelector(selector); err != nil {
+		return err
+	}
+	return nil
+}
+
 func admissionResponseError(err error) *admission.AdmissionResponse {
 	mylog := log.ComponentLogger(componentName, "admissionResponseError")
 	mylog.Error().Err(err).Msg("admission response error, skipping any modification")
@@ -222,8 +259,8 @@ func admissionResponseError(err error) *admission.AdmissionResponse {
 	}
 }
 
-func (r Rule) paintObject(object metaObject) *admission.AdmissionResponse {
-	mylog := log.ComponentLogger(componentName, "paintObject")
+func (r Rule) paintObject(object metaObject, logger zerolog.Logger) *admission.AdmissionResponse {
+	mylog := logger.With().Str("func", "paintObject").Logger()
 	reviewResponse := admission.AdmissionResponse{}
 	reviewResponse.Allowed = true
 
@@ -234,7 +271,7 @@ func (r Rule) paintObject(object metaObject) *admission.AdmissionResponse {
 	if err != nil {
 		return admissionResponseError(fmt.Errorf("could not create the json patch"))
 	}
-	mylog.Debug().Str("patch", string(patch)).Msg("created json patch")
+	mylog.Info().Bytes("patch", patch).Msg("created json patch")
 	reviewResponse.Patch = patch
 	pt := admission.PatchTypeJSONPatch
 	reviewResponse.PatchType = &pt

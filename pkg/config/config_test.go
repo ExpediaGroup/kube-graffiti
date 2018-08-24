@@ -162,5 +162,213 @@ func TestUnknownConfigurationFieldsThrowAnError(t *testing.T) {
 
 	// assert that we can marshal the config into a Configuration struct
 	_, err = unmarshalFromViperStrict()
-	require.Error(t, err, "when marshalling into a strict Configuration it is, however, not ok to have unknown fields in viper")
+	require.Error(t, err, "when unmarshaling into a strict Configuration it is, however, not ok to have unknown fields in viper")
+}
+
+func TestServerNamespaceAndServiceAreRequired(t *testing.T) {
+	var source = `---
+rules:
+- registration:
+    name: my-rule
+  matcher:
+    label-selectors:
+    -  "name=test-pod"
+  additions:
+    annotations:
+      graffiti: "painted this object"
+`
+	// read viper config from our test config file
+	setDefaults()
+	viper.Set("log-level", "debug")
+	viper.SetConfigType("yaml")
+	err := viper.ReadConfig(bytes.NewBuffer([]byte(source)))
+	require.NoError(t, err, "there shouldn't be a failure loading the configuration")
+
+	// check that config validates ok
+	config, err := unmarshalFromViperStrict()
+	require.NoError(t, err)
+	err = config.ValidateConfig()
+	assert.Errorf(t, err, "missing required parameter")
+}
+
+func TestAllRulesMustHaveAdditions(t *testing.T) {
+	var source = `---
+server:
+  namespace: test
+  service: test
+rules:
+- registration:
+    name: my-rule
+  matcher:
+    label-selectors:
+    -  "name=test-pod"
+`
+	// read viper config from our test config file
+	setDefaults()
+	viper.Set("log-level", "debug")
+	viper.SetConfigType("yaml")
+	err := viper.ReadConfig(bytes.NewBuffer([]byte(source)))
+	require.NoError(t, err, "there shouldn't be a failure loading the configuration")
+
+	// check that config validates ok
+	config, err := unmarshalFromViperStrict()
+	require.NoError(t, err, "errors are caught during validation not unmarshalling")
+	err = config.ValidateConfig()
+	assert.Errorf(t, err, "rule my-rule is invalid - it does not contain any additional labels or annotations", "rules without additions should cause ValidateConfig to fail")
+}
+
+func TestMultipleRulesCanNotHaveTheSameName(t *testing.T) {
+	var source = `---
+server:
+  namespace: test
+  service: test
+rules:
+- registration:
+    name: my-rule
+  matcher:
+    label-selectors:
+    -  "name=test-pod"
+  additions:
+    annotations:
+      graffiti: "painted this object"
+- registration:
+    name: my-rule
+  matcher:
+    label-selectors:
+    -  "name=another-test-pod"
+  additions:
+    labels:
+      graffiti: "painted this object"
+`
+	// read viper config from our test config file
+	setDefaults()
+	viper.Set("log-level", "debug")
+	viper.SetConfigType("yaml")
+	err := viper.ReadConfig(bytes.NewBuffer([]byte(source)))
+	require.NoError(t, err, "there shouldn't be a failure loading the configuration")
+
+	// check that config validates ok
+	config, err := unmarshalFromViperStrict()
+	require.NoError(t, err, "errors are caught during validation not unmarshalling")
+	err = config.ValidateConfig()
+	assert.Errorf(t, err, "rule my-rule is invalid - found duplicate rules with the same name, they must be unique", "two rules with the same name should cause a validation error")
+}
+
+func TestRulesContainingInvalidLabelSelectorsFailValidation(t *testing.T) {
+	var source = `---
+server:
+  namespace: test
+  service: test
+rules:
+- registration:
+    name: my-rule
+  matcher:
+    label-selectors:
+    -  "i don't know what you hope this label selector will do?"
+  additions:
+    annotations:
+      graffiti: "painted this object"
+`
+	// read viper config from our test config file
+	setDefaults()
+	viper.Set("log-level", "debug")
+	viper.SetConfigType("yaml")
+	err := viper.ReadConfig(bytes.NewBuffer([]byte(source)))
+	require.NoError(t, err, "there shouldn't be a failure loading the configuration")
+
+	// check that config validates ok
+	config, err := unmarshalFromViperStrict()
+	require.NoError(t, err, "errors are caught during validation not unmarshalling")
+	err = config.ValidateConfig()
+	assert.Errorf(t, err, "rule my-rule is invalid - contains invalid label selector 'i don't know what you hope this label selector will do?': unable to parse requirement: found 'don't', expected: '=', '!=', '==', 'in', notin'", "invalid rules generate a validation error")
+}
+
+func TestASetBasedLabelSelectorsAreValid(t *testing.T) {
+	// this would be a valid label selector but field selectors are more limited
+	var source = `---
+server:
+  namespace: test
+  service: test
+rules:
+- registration:
+    name: my-rule
+  matcher:
+    label-selectors:
+    -  "namespace notin (default,kube-system,kube-public)"
+  additions:
+    annotations:
+      graffiti: "painted this object"
+`
+	// read viper config from our test config file
+	setDefaults()
+	viper.Set("log-level", "debug")
+	viper.SetConfigType("yaml")
+	err := viper.ReadConfig(bytes.NewBuffer([]byte(source)))
+	require.NoError(t, err, "there shouldn't be a failure loading the configuration")
+
+	// check that config validates ok
+	config, err := unmarshalFromViperStrict()
+	require.NoError(t, err, "errors are caught during validation not unmarshalling")
+	err = config.ValidateConfig()
+	assert.NoErrorf(t, err, "this is a valid label selector and so should not fail our validation checks")
+}
+
+func TestASimpleFieldSelectorIsValid(t *testing.T) {
+	// this would be a valid label selector but field selectors are more limited
+	var source = `---
+server:
+  namespace: test
+  service: test
+rules:
+- registration:
+    name: my-rule
+  matcher:
+    field-selectors:
+    -  "metadata.name = dave"
+  additions:
+    annotations:
+      graffiti: "painted this object"
+`
+	// read viper config from our test config file
+	setDefaults()
+	viper.Set("log-level", "debug")
+	viper.SetConfigType("yaml")
+	err := viper.ReadConfig(bytes.NewBuffer([]byte(source)))
+	require.NoError(t, err, "there shouldn't be a failure loading the configuration")
+
+	// check that config validates ok
+	config, err := unmarshalFromViperStrict()
+	require.NoError(t, err, "errors are caught during validation not unmarshalling")
+	err = config.ValidateConfig()
+	assert.NoErrorf(t, err, "this is a valid field selector and so should not fail our validation checks")
+}
+
+func TestRulesContainingInvalidFieldSelectorsFailValidation(t *testing.T) {
+	// this would be a valid label selector but field selectors are more limited
+	var source = `---
+server:
+  namespace: test
+  service: test
+rules:
+- registration:
+    name: my-rule
+  matcher:
+    field-selectors:
+    -  "namespace notin (default,kube-system,kube-public)"
+  additions:
+    annotations:
+      graffiti: "painted this object"
+`
+	// read viper config from our test config file
+	setDefaults()
+	viper.Set("log-level", "debug")
+	viper.SetConfigType("yaml")
+	err := viper.ReadConfig(bytes.NewBuffer([]byte(source)))
+	require.NoError(t, err, "there shouldn't be a failure loading the configuration")
+
+	// check that config validates ok
+	config, err := unmarshalFromViperStrict()
+	require.NoError(t, err, "errors are caught during validation not unmarshalling")
+	err = config.ValidateConfig()
+	assert.Error(t, err, "this complex label-selector rule is not a valid field selector rule")
 }
