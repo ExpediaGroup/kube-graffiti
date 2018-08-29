@@ -4,9 +4,13 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/mitchellh/mapstructure"
 	"github.com/spf13/viper"
+	apivalidation "k8s.io/apimachinery/pkg/api/validation"
+	utilvalidation "k8s.io/apimachinery/pkg/util/validation"
+	"k8s.io/apimachinery/pkg/util/validation/field"
 	"stash.hcom/run/kube-graffiti/pkg/graffiti"
 	"stash.hcom/run/kube-graffiti/pkg/healthcheck"
 	"stash.hcom/run/kube-graffiti/pkg/log"
@@ -42,7 +46,7 @@ type Server struct {
 
 type Rule struct {
 	Registration webhook.Registration `mapstructure:"registration"`
-	Matcher      graffiti.Matcher     `mapstructure:"matcher"`
+	Matchers     graffiti.Matchers    `mapstructure:"matchers"`
 	Additions    graffiti.Additions   `mapstructure:"additions"`
 }
 
@@ -73,9 +77,9 @@ func setDefaults() {
 	viper.SetDefault("health-checker.port", 8080)
 	viper.SetDefault("health-checker.path", "/healthz")
 	viper.SetDefault("server.company-domain", "acme.com")
-	viper.SetDefault("server.ca-cert-path", "/ca.pem")
-	viper.SetDefault("server.cert-path", "/server.pem")
-	viper.SetDefault("server.cert-path", "/key.pem")
+	viper.SetDefault("server.ca-cert-path", "/ca-cert")
+	viper.SetDefault("server.cert-path", "/server-cert")
+	viper.SetDefault("server.cert-path", "/server-key")
 }
 
 func unmarshalFromViperStrict() (*Configuration, error) {
@@ -148,6 +152,11 @@ func (c *Configuration) validateRules() error {
 	mylog := log.ComponentLogger(componentName, "validateRules")
 	mylog.Debug().Msg("validating graffiti rules")
 
+	if len(c.Rules) == 0 {
+		mylog.Error().Msg("configuration does not contain any rules")
+		return errors.New("no rules found")
+	}
+
 	existingRuleNames := make(map[string]bool)
 	for _, rule := range c.Rules {
 		rulelog := mylog.With().Str("rule", rule.Registration.Name).Logger()
@@ -166,8 +175,8 @@ func (c *Configuration) validateRules() error {
 		existingRuleNames[rule.Registration.Name] = true
 
 		// all label selectors must be valid...
-		if len(rule.Matcher.LabelSelectors) > 0 {
-			for _, selector := range rule.Matcher.LabelSelectors {
+		if len(rule.Matchers.LabelSelectors) > 0 {
+			for _, selector := range rule.Matchers.LabelSelectors {
 				if err := graffiti.ValidateLabelSelector(selector); err != nil {
 					rulelog.Error().Str("label-selector", selector).Msg("rule contains an invalid label selector")
 					return fmt.Errorf("rule %s is invalid - contains invalid label selector '%s': %v", rule.Registration.Name, selector, err)
@@ -176,12 +185,39 @@ func (c *Configuration) validateRules() error {
 		}
 
 		// all field selectors must also be valid...
-		if len(rule.Matcher.FieldSelectors) > 0 {
-			for _, selector := range rule.Matcher.FieldSelectors {
+		if len(rule.Matchers.FieldSelectors) > 0 {
+			for _, selector := range rule.Matchers.FieldSelectors {
 				if err := graffiti.ValidateFieldSelector(selector); err != nil {
 					rulelog.Error().Str("field-selector", selector).Msg("rule contains an invalid field selector")
 					return fmt.Errorf("rule %s is invalid - contains invalid field selector '%s': %v", rule.Registration.Name, selector, err)
 				}
+			}
+		}
+
+		// validate all additions labels using kubernetes validation methods
+		if len(rule.Additions.Labels) > 0 {
+			for k, v := range rule.Additions.Labels {
+				if errorList := utilvalidation.IsQualifiedName(k); len(errorList) != 0 {
+					rulelog.Error().Str("label-key", k).Str("errors", strings.Join(errorList, "; ")).Msg("rule contains invalid additions label key")
+					return fmt.Errorf("rule %s contains invalid label key: %s", rule.Registration.Name, strings.Join(errorList, "; "))
+				}
+				if errorList := utilvalidation.IsValidLabelValue(v); len(errorList) != 0 {
+					rulelog.Error().Str("label-value", v).Msg("rule contains invalid additions label value")
+					return fmt.Errorf("rule %s contains invalid label value: %s", rule.Registration.Name, strings.Join(errorList, "; "))
+				}
+			}
+		}
+
+		// validate all additions annotations by using kubernetes validation methods
+		path := field.NewPath("metadata.annotations")
+		if len(rule.Additions.Annotations) > 0 {
+			if errorList := apivalidation.ValidateAnnotations(rule.Additions.Annotations, path); len(errorList) != 0 {
+				var info []string
+				for _, errorPart := range errorList.ToAggregate().Errors() {
+					info = append(info, errorPart.Error())
+				}
+				rulelog.Error().Str("errors", strings.Join(info, "; ")).Msg("rule contains invalid annotations")
+				return fmt.Errorf("rule %s contains invalid annotations: %s", rule.Registration.Name, strings.Join(info, "; "))
 			}
 		}
 	}

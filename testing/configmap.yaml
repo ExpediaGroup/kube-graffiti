@@ -19,9 +19,7 @@ data:
       key-path: /tls/server-key
     rules:
     - registration:
-        name: label-namespaces-called-dave
-        namespace-selector:
-        failure-policy: Fail
+        name: add-name-label-to-namespaces
         targets:
         - api-groups:
           - ""
@@ -29,29 +27,48 @@ data:
           - v1
           resources:
           - namespaces
-      matcher:
-        label-selectors:
-        - "name=dave"
-        - "dave=true"
-        field-selectors:
-        - "metadata.name=dave"
-        boolean-operator: OR
+        failure-policy: Ignore
       additions:
         labels:
-          result: "this_is_indeed_daveish"
+          name: '{{ index . "metadata.name" }}'
     - registration:
-        name: annotate-all-core-objects-except-anything-in-kube-system
-        failure-policy: Ignore
+        name: namespaces-istio-and-kiam
         targets:
         - api-groups:
           - ""
           api-versions:
+          - v1
+          resources:
+          - namespaces
+        failure-policy: Ignore
+      matchers:
+        label-selectors:
+        -  "name notin (kube-system,kube-public,default)"
+      additions:
+        labels:
+          istio-injection: enabled
+        annotations:
+          iam.amazonaws.com/permitted: ".*"
+    - registration:
+        name: mobile-magic-ownership-markers
+        targets:
+        - api-groups:
+          - "*"
+          api-versions:
           - "*"
           resources:
-          - "*"
-      matcher:
-        field-selectors:
-        -  "metadata.namespace!=kube-system"
+          - pods
+          - deployments
+          - services
+          - jobs
+          - ingresses
+          - secrets
+          - configmaps
+        namespace-selector: name = mobile-team
+        failure-policy: Ignore
       additions:
         annotations:
-          graffiti: "woz_er_2018"
+          owner: "Stephanie Jobs"
+          security-zone: "alpha"
+          contact: "mobileteam@mycorp.com"
+          wiki: "http://wiki.mycorp.com/mobile-team"

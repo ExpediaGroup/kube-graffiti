@@ -63,7 +63,7 @@ if [[ ! -f "./${kubectlbin}" ]]; then
   download_kubectl ${kubectlbin} ${kubectl_version} ${codebase}
 fi
 
-for template in namespace clusterrole serviceaccount clusterrolebinding service webhook-tls-secret configmap
+for template in namespace roles serviceaccount rolebindings service webhook-tls-secret configmap
 do
   [[ -f "testing/${template}.yaml" ]] && ./$kubectlbin apply -f testing/${template}.yaml
 done

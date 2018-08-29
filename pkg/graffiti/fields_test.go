@@ -8,7 +8,7 @@ import (
 )
 
 func TestEmptyObject(t *testing.T) {
-	_, err := makeFieldMap([]byte{})
+	_, err := makeFieldMapFromRawObject([]byte{})
 	require.Error(t, err)
 	assert.Equal(t, "no fields found", err.Error())
 
@@ -16,7 +16,7 @@ func TestEmptyObject(t *testing.T) {
 
 func TestTopLevelObjectMustBeAMap(t *testing.T) {
 	validJSON := `[ "apple", "orange", "banana" ]`
-	_, err := makeFieldMap([]byte(validJSON))
+	_, err := makeFieldMapFromRawObject([]byte(validJSON))
 	assert.Error(t, err)
 	assert.Equal(t, "failed to unmarshal object: json: cannot unmarshal array into Go value of type map[string]interface {}", err.Error())
 }
@@ -26,32 +26,32 @@ func TestBaseTypesAsStrings(t *testing.T) {
 
 	// strings
 	testJSON := `{ "test": "dave" }`
-	fm, err := makeFieldMap([]byte(testJSON))
+	fm, err := makeFieldMapFromRawObject([]byte(testJSON))
 	require.NoError(t, err)
 	assert.Equal(t, "dave", fm["test"])
 
 	// ints
 	testJSON = `{ "test": 100 }`
-	fm, err = makeFieldMap([]byte(testJSON))
+	fm, err = makeFieldMapFromRawObject([]byte(testJSON))
 	require.NoError(t, err)
 	assert.Equal(t, "100", fm["test"])
 
 	// floats
 	testJSON = `{ "test": 63.333392 }`
-	fm, err = makeFieldMap([]byte(testJSON))
+	fm, err = makeFieldMapFromRawObject([]byte(testJSON))
 	require.NoError(t, err)
 	assert.Equal(t, "63.333392", fm["test"])
 
 	// bools
 	testJSON = `{ "test": true }`
-	fm, err = makeFieldMap([]byte(testJSON))
+	fm, err = makeFieldMapFromRawObject([]byte(testJSON))
 	require.NoError(t, err)
 	assert.Equal(t, "true", fm["test"])
 }
 
 func TestSlicesAreReferencedByIndex(t *testing.T) {
 	testJSON := `{ "test": [ "dave", 100, 63.49, true ] }`
-	fm, err := makeFieldMap([]byte(testJSON))
+	fm, err := makeFieldMapFromRawObject([]byte(testJSON))
 	require.NoError(t, err)
 
 	assert.Equal(t, "dave", fm["test.0"])
@@ -62,7 +62,7 @@ func TestSlicesAreReferencedByIndex(t *testing.T) {
 
 func TestMapsAreReferencedByKey(t *testing.T) {
 	testJSON := `{ "test": { "band": "Queen", "singer": "Freddie Mercury", "status": "legend" }}`
-	fm, err := makeFieldMap([]byte(testJSON))
+	fm, err := makeFieldMapFromRawObject([]byte(testJSON))
 	require.NoError(t, err)
 
 	assert.Equal(t, "Queen", fm["test.band"])
@@ -90,7 +90,7 @@ func TestComplexObject(t *testing.T) {
 		}
 	 }`
 
-	fm, err := makeFieldMap([]byte(testJSON))
+	fm, err := makeFieldMapFromRawObject([]byte(testJSON))
 	require.NoError(t, err)
 
 	assert.Equal(t, "test-namespace", fm["metadata.name"])

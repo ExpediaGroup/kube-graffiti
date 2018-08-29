@@ -37,7 +37,7 @@ rules:
       - v1
       resources:
       - namespaces
-  matcher:
+  matchers:
     label-selectors:
     - "name = dave"
     - "dave = true"
@@ -54,7 +54,7 @@ rules:
       - "*"
       resources:
       - "*"
-  matcher:
+  matchers:
     field-selectors:
     -  "metadata.namespace != kube-system"
   additions:
@@ -84,8 +84,8 @@ func TestParseConfig(t *testing.T) {
 	assert.Equal(t, "annotate-everything-except-kube-system", config.Rules[1].Registration.Name)
 	assert.Equal(t, "Fail", config.Rules[0].Registration.FailurePolicy)
 	defaultOperator, _ := graffiti.BooleanOperatorString("AND")
-	assert.IsType(t, defaultOperator, config.Rules[0].Matcher.BooleanOperator)
-	assert.Equal(t, defaultOperator, config.Rules[0].Matcher.BooleanOperator, "the boolean-operator needs to be the correct type and default to its AND/0 value")
+	assert.IsType(t, defaultOperator, config.Rules[0].Matchers.BooleanOperator)
+	assert.Equal(t, defaultOperator, config.Rules[0].Matchers.BooleanOperator, "the boolean-operator needs to be the correct type and default to its AND/0 value")
 
 	// check that config validates ok
 	err = config.ValidateConfig()
@@ -103,7 +103,7 @@ func TestUnmarshalBooleanOperatorOR(t *testing.T) {
 rules:
 - registration:
     name: boolean-or-between-label-and-field-selectors
-  matcher:
+  matchers:
     label-selectors:
     - "name=dave"
     - "dave=true"
@@ -122,7 +122,7 @@ rules:
 	config, err := unmarshalFromViperStrict()
 	require.NoError(t, err)
 
-	assert.Equal(t, graffiti.BooleanOperator(1), config.Rules[0].Matcher.BooleanOperator, "the OR operator is represented internaly as integer 1")
+	assert.Equal(t, graffiti.BooleanOperator(1), config.Rules[0].Matchers.BooleanOperator, "the OR operator is represented internaly as integer 1")
 }
 
 func TestUnmarshalBooleanOperatorXOR(t *testing.T) {
@@ -130,7 +130,7 @@ func TestUnmarshalBooleanOperatorXOR(t *testing.T) {
 rules:
 - registration:
     name: boolean-or-between-label-and-field-selectors
-  matcher:
+  matchers:
     label-selectors:
     - "name=dave"
     - "dave=true"
@@ -149,7 +149,7 @@ rules:
 	config, err := unmarshalFromViperStrict()
 	require.NoError(t, err)
 
-	assert.Equal(t, graffiti.BooleanOperator(2), config.Rules[0].Matcher.BooleanOperator, "the OR operator is represented internaly as integer 2")
+	assert.Equal(t, graffiti.BooleanOperator(2), config.Rules[0].Matchers.BooleanOperator, "the OR operator is represented internaly as integer 2")
 }
 
 func TestUnknownConfigurationFieldsThrowAnError(t *testing.T) {
@@ -165,12 +165,33 @@ func TestUnknownConfigurationFieldsThrowAnError(t *testing.T) {
 	require.Error(t, err, "when unmarshaling into a strict Configuration it is, however, not ok to have unknown fields in viper")
 }
 
+func TestNoRulesThrowsAnError(t *testing.T) {
+	var source = `---
+server:
+  namespace: test
+  service: test
+`
+	// read viper config from our test config file
+	setDefaults()
+	viper.Set("log-level", "debug")
+	viper.SetConfigType("yaml")
+	err := viper.ReadConfig(bytes.NewBuffer([]byte(source)))
+	require.NoError(t, err, "there shouldn't be a failure loading the configuration")
+
+	// assert that we can marshal the config into a Configuration struct
+	config, err := unmarshalFromViperStrict()
+	require.NoError(t, err)
+
+	err = config.ValidateConfig()
+	assert.Errorf(t, err, "no rules found")
+}
+
 func TestServerNamespaceAndServiceAreRequired(t *testing.T) {
 	var source = `---
 rules:
 - registration:
     name: my-rule
-  matcher:
+  matchers:
     label-selectors:
     -  "name=test-pod"
   additions:
@@ -199,7 +220,7 @@ server:
 rules:
 - registration:
     name: my-rule
-  matcher:
+  matchers:
     label-selectors:
     -  "name=test-pod"
 `
@@ -225,7 +246,7 @@ server:
 rules:
 - registration:
     name: my-rule
-  matcher:
+  matchers:
     label-selectors:
     -  "name=test-pod"
   additions:
@@ -233,7 +254,7 @@ rules:
       graffiti: "painted this object"
 - registration:
     name: my-rule
-  matcher:
+  matchers:
     label-selectors:
     -  "name=another-test-pod"
   additions:
@@ -262,7 +283,7 @@ server:
 rules:
 - registration:
     name: my-rule
-  matcher:
+  matchers:
     label-selectors:
     -  "i don't know what you hope this label selector will do?"
   additions:
@@ -292,7 +313,7 @@ server:
 rules:
 - registration:
     name: my-rule
-  matcher:
+  matchers:
     label-selectors:
     -  "namespace notin (default,kube-system,kube-public)"
   additions:
@@ -322,7 +343,7 @@ server:
 rules:
 - registration:
     name: my-rule
-  matcher:
+  matchers:
     field-selectors:
     -  "metadata.name = dave"
   additions:
@@ -352,7 +373,7 @@ server:
 rules:
 - registration:
     name: my-rule
-  matcher:
+  matchers:
     field-selectors:
     -  "namespace notin (default,kube-system,kube-public)"
   additions:
@@ -371,4 +392,186 @@ rules:
 	require.NoError(t, err, "errors are caught during validation not unmarshalling")
 	err = config.ValidateConfig()
 	assert.Error(t, err, "this complex label-selector rule is not a valid field selector rule")
+}
+
+func TestValidAdditionalLabel(t *testing.T) {
+	var source = `---
+server:
+  namespace: test
+  service: test
+rules:
+- registration:
+    name: my-rule
+  additions:
+    labels:
+      add-me: "true"
+`
+	// read viper config from our test config file
+	setDefaults()
+	viper.Set("log-level", "debug")
+	viper.SetConfigType("yaml")
+	err := viper.ReadConfig(bytes.NewBuffer([]byte(source)))
+	require.NoError(t, err, "there shouldn't be a failure loading the configuration")
+
+	// check that config validates ok
+	config, err := unmarshalFromViperStrict()
+	require.NoError(t, err, "errors are caught during validation not unmarshalling")
+	err = config.ValidateConfig()
+	assert.NoError(t, err)
+}
+
+func TestInvalidAdditionalLabelKey(t *testing.T) {
+	var source = `---
+server:
+  namespace: test
+  service: test
+rules:
+- registration:
+    name: my-rule
+  additions:
+    labels:
+      "dave.com/multiple/slashes": "painted this object"
+`
+	// read viper config from our test config file
+	setDefaults()
+	viper.Set("log-level", "debug")
+	viper.SetConfigType("yaml")
+	err := viper.ReadConfig(bytes.NewBuffer([]byte(source)))
+	require.NoError(t, err, "there shouldn't be a failure loading the configuration")
+
+	// check that config validates ok
+	config, err := unmarshalFromViperStrict()
+	require.NoError(t, err, "errors are caught during validation not unmarshalling")
+	err = config.ValidateConfig()
+	assert.EqualError(t, err, "rule my-rule contains invalid label key: a qualified name must consist of alphanumeric characters, '-', '_' or '.', and must start and end with an alphanumeric character (e.g. 'MyName',  or 'my.name',  or '123-abc', regex used for validation is '([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9]') with an optional DNS subdomain prefix and '/' (e.g. 'example.com/MyName')")
+}
+
+func TestInvalidLongAdditionalLabelKey(t *testing.T) {
+	var source = `---
+server:
+  namespace: test
+  service: test
+rules:
+- registration:
+    name: my-rule
+  additions:
+    labels:
+      "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx": "painted this object"
+`
+	// read viper config from our test config file
+	setDefaults()
+	viper.Set("log-level", "debug")
+	viper.SetConfigType("yaml")
+	err := viper.ReadConfig(bytes.NewBuffer([]byte(source)))
+	require.NoError(t, err, "there shouldn't be a failure loading the configuration")
+
+	// check that config validates ok
+	config, err := unmarshalFromViperStrict()
+	require.NoError(t, err, "errors are caught during validation not unmarshalling")
+	err = config.ValidateConfig()
+	assert.EqualError(t, err, "rule my-rule contains invalid label key: name part must be no more than 63 characters")
+}
+
+func TestInvalidAdditionalLabelValue(t *testing.T) {
+	var source = `---
+server:
+  namespace: test
+  service: test
+rules:
+- registration:
+    name: my-rule
+  additions:
+    labels:
+      valid-label: "label values can't contain spaces"
+`
+	// read viper config from our test config file
+	setDefaults()
+	viper.Set("log-level", "debug")
+	viper.SetConfigType("yaml")
+	err := viper.ReadConfig(bytes.NewBuffer([]byte(source)))
+	require.NoError(t, err, "there shouldn't be a failure loading the configuration")
+
+	// check that config validates ok
+	config, err := unmarshalFromViperStrict()
+	require.NoError(t, err, "errors are caught during validation not unmarshalling")
+	err = config.ValidateConfig()
+	assert.EqualError(t, err, "rule my-rule contains invalid label value: a valid label must be an empty string or consist of alphanumeric characters, '-', '_' or '.', and must start and end with an alphanumeric character (e.g. 'MyValue',  or 'my_value',  or '12345', regex used for validation is '(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?')")
+}
+
+func TestInvalidLongAdditionalLabelValue(t *testing.T) {
+	var source = `---
+server:
+  namespace: test
+  service: test
+rules:
+- registration:
+    name: my-rule
+  additions:
+    labels:
+      add-me: "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+`
+	// read viper config from our test config file
+	setDefaults()
+	viper.Set("log-level", "debug")
+	viper.SetConfigType("yaml")
+	err := viper.ReadConfig(bytes.NewBuffer([]byte(source)))
+	require.NoError(t, err, "there shouldn't be a failure loading the configuration")
+
+	// check that config validates ok
+	config, err := unmarshalFromViperStrict()
+	require.NoError(t, err, "errors are caught during validation not unmarshalling")
+	err = config.ValidateConfig()
+	assert.EqualError(t, err, "rule my-rule contains invalid label value: must be no more than 63 characters")
+}
+
+func TestValidAdditionalAnnotation(t *testing.T) {
+	var source = `---
+server:
+  namespace: test
+  service: test
+rules:
+- registration:
+    name: my-rule
+  additions:
+    annotations:
+      ming-industries.com/mercy: "never on my watch!"
+`
+	// read viper config from our test config file
+	setDefaults()
+	viper.Set("log-level", "debug")
+	viper.SetConfigType("yaml")
+	err := viper.ReadConfig(bytes.NewBuffer([]byte(source)))
+	require.NoError(t, err, "there shouldn't be a failure loading the configuration")
+
+	// check that config validates ok
+	config, err := unmarshalFromViperStrict()
+	require.NoError(t, err, "errors are caught during validation not unmarshalling")
+	err = config.ValidateConfig()
+	assert.NoError(t, err)
+}
+
+func TestInvalidAdditionalAnnotationKey(t *testing.T) {
+	var source = `---
+server:
+  namespace: test
+  service: test
+rules:
+- registration:
+    name: my-rule
+  additions:
+    annotations:
+      "dave.com/multiple/slashes": "painted this object"
+`
+	// read viper config from our test config file
+	setDefaults()
+	viper.Set("log-level", "debug")
+	viper.SetConfigType("yaml")
+	err := viper.ReadConfig(bytes.NewBuffer([]byte(source)))
+	require.NoError(t, err, "there shouldn't be a failure loading the configuration")
+
+	// check that config validates ok
+	config, err := unmarshalFromViperStrict()
+	require.NoError(t, err, "errors are caught during validation not unmarshalling")
+	err = config.ValidateConfig()
+	assert.EqualError(t, err, "rule my-rule contains invalid annotations: metadata.annotations: Invalid value: \"dave.com/multiple/slashes\": a qualified name must consist of alphanumeric characters, '-', '_' or '.', and must start and end with an alphanumeric character (e.g. 'MyName',  or 'my.name',  or '123-abc', regex used for validation is '([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9]') with an optional DNS subdomain prefix and '/' (e.g. 'example.com/MyName')")
 }

@@ -33,13 +33,13 @@ const (
 // It does not have mapstructure tags because it is not directly marshalled from config
 type Rule struct {
 	Name      string
-	Matcher   Matcher
+	Matchers  Matchers
 	Additions Additions
 }
 
-// Matcher manages the rules of matching an object
+// Matchers manages the rules of matching an object
 // This type is directly marshalled from config and so has mapstructure tags
-type Matcher struct {
+type Matchers struct {
 	LabelSelectors  []string        `mapstructure:"label-selectors"`
 	FieldSelectors  []string        `mapstructure:"field-selectors"`
 	BooleanOperator BooleanOperator `mapstructure:"boolean-operator"`
@@ -79,20 +79,26 @@ func (r Rule) Mutate(req *admission.AdmissionRequest) *admission.AdmissionRespon
 		metaObject.Meta.Namespace = req.Namespace
 	}
 
-	if len(r.Matcher.LabelSelectors) == 0 && len(r.Matcher.FieldSelectors) == 0 {
+	// create the field map for use with field matchers and addition templating.
+	fieldMap, err := makeFieldMapFromRequest(req)
+	if err != nil {
+		return admissionResponseError(err)
+	}
+
+	if len(r.Matchers.LabelSelectors) == 0 && len(r.Matchers.FieldSelectors) == 0 {
 		mylog.Debug().Msg("rule does not contain any label or field selectors so it matches ALL")
 		paintIt = true
 	} else {
 		// match against all of the label selectors
-		mylog.Debug().Int("count", len(r.Matcher.LabelSelectors)).Msg("matching against label selectors")
+		mylog.Debug().Int("count", len(r.Matchers.LabelSelectors)).Msg("matching against label selectors")
 		labelMatches, err = r.matchLabelSelectors(metaObject)
 		if err != nil {
 			return admissionResponseError(err)
 		}
 
 		// test if we match any field selectors
-		mylog.Debug().Int("count", len(r.Matcher.FieldSelectors)).Msg("matching against field selectors")
-		fieldMatches, err = r.matchFieldSelectors(req)
+		mylog.Debug().Int("count", len(r.Matchers.FieldSelectors)).Msg("matching against field selectors")
+		fieldMatches, err = r.matchFieldSelectors(req, fieldMap)
 		if err != nil {
 			return admissionResponseError(err)
 		}
@@ -102,13 +108,13 @@ func (r Rule) Mutate(req *admission.AdmissionRequest) *admission.AdmissionRespon
 
 	// Combine selector booleans and decide to paint object or not
 	if !paintIt {
-		descisonLog := mylog.With().Int("label-selectors-length", len(r.Matcher.LabelSelectors)).Bool("labels-matched", labelMatches).Int("field-selector-length", len(r.Matcher.FieldSelectors)).Bool("fields-matched", fieldMatches).Logger()
-		switch r.Matcher.BooleanOperator {
+		descisonLog := mylog.With().Int("label-selectors-length", len(r.Matchers.LabelSelectors)).Bool("labels-matched", labelMatches).Int("field-selector-length", len(r.Matchers.FieldSelectors)).Bool("fields-matched", fieldMatches).Logger()
+		switch r.Matchers.BooleanOperator {
 		case AND:
-			paintIt = (len(r.Matcher.LabelSelectors) == 0 || labelMatches) && (len(r.Matcher.FieldSelectors) == 0 || fieldMatches)
+			paintIt = (len(r.Matchers.LabelSelectors) == 0 || labelMatches) && (len(r.Matchers.FieldSelectors) == 0 || fieldMatches)
 			descisonLog.Debug().Str("boolean-operator", "AND").Bool("result", paintIt).Msg("performed label-selector AND field-selector")
 		case OR:
-			paintIt = (len(r.Matcher.LabelSelectors) != 0 && labelMatches) || (len(r.Matcher.FieldSelectors) != 0 && fieldMatches)
+			paintIt = (len(r.Matchers.LabelSelectors) != 0 && labelMatches) || (len(r.Matchers.FieldSelectors) != 0 && fieldMatches)
 			descisonLog.Debug().Str("boolean-operator", "OR").Bool("result", paintIt).Msg("performed label-selector OR field-selector")
 		case XOR:
 			paintIt = labelMatches != fieldMatches
@@ -132,13 +138,13 @@ func (r Rule) Mutate(req *admission.AdmissionRequest) *admission.AdmissionRespon
 	}
 
 	mylog.Info().Msg("rule matched - painting object")
-	return r.paintObject(metaObject, mylog)
+	return r.paintObject(metaObject, fieldMap, mylog)
 }
 
 func (r Rule) matchLabelSelectors(object metaObject) (bool, error) {
 	mylog := log.ComponentLogger(componentName, "matchLabelSelectors")
 	// test if we matched any of the label selectors
-	if len(r.Matcher.LabelSelectors) != 0 {
+	if len(r.Matchers.LabelSelectors) != 0 {
 		// add name and namespace as labels so they can be matched with the label selector
 		if len(object.Meta.Labels) == 0 {
 			object.Meta.Labels = make(map[string]string)
@@ -147,7 +153,7 @@ func (r Rule) matchLabelSelectors(object metaObject) (bool, error) {
 		object.Meta.Labels["name"] = object.Meta.Name
 		object.Meta.Labels["namespace"] = object.Meta.Namespace
 
-		for _, selector := range r.Matcher.LabelSelectors {
+		for _, selector := range r.Matchers.LabelSelectors {
 			mylog.Debug().Str("label-selector", selector).Msg("testing label selector")
 			selectorMatch, err := matchLabelSelector(selector, object.Meta.Labels)
 			if err != nil {
@@ -160,6 +166,22 @@ func (r Rule) matchLabelSelectors(object metaObject) (bool, error) {
 		}
 	}
 	return false, nil
+}
+
+func makeFieldMapFromRequest(req *admission.AdmissionRequest) (map[string]string, error) {
+	// create the field map for use with field matchers and addition templating.
+	fm, err := makeFieldMapFromRawObject(req.Object.Raw)
+	if err != nil {
+		return fm, err
+	}
+	// make sure that metadata.name and metadata.namespace are populated from req object
+	if req.Name != "" {
+		fm["metadata.name"] = req.Name
+	}
+	if req.Namespace != "" {
+		fm["metadata.namespace"] = req.Namespace
+	}
+	return fm, nil
 }
 
 // matchSelector will apply a kubernetes labels.Selector to a map[string]string and return a matched bool and error.
@@ -190,25 +212,12 @@ func ValidateLabelSelector(selector string) error {
 	return nil
 }
 
-func (r Rule) matchFieldSelectors(req *admission.AdmissionRequest) (bool, error) {
+func (r Rule) matchFieldSelectors(req *admission.AdmissionRequest, fm map[string]string) (bool, error) {
 	mylog := log.ComponentLogger(componentName, "matchFieldSelectors")
-	if len(r.Matcher.FieldSelectors) != 0 {
-		fieldMap, err := makeFieldMap(req.Object.Raw)
-		if err != nil {
-			return false, err
-		}
-
-		// make sure that metadata.name and metadata.namespace are populated from req object
-		if req.Name != "" {
-			fieldMap["metadata.name"] = req.Name
-		}
-		if req.Namespace != "" {
-			fieldMap["metadata.namespace"] = req.Namespace
-		}
-
-		for _, selector := range r.Matcher.FieldSelectors {
+	if len(r.Matchers.FieldSelectors) != 0 {
+		for _, selector := range r.Matchers.FieldSelectors {
 			mylog.Debug().Str("field-selector", selector).Msg("testing field selector")
-			selectorMatch, err := matchFieldSelector(selector, fieldMap)
+			selectorMatch, err := matchFieldSelector(selector, fm)
 			if err != nil {
 				return false, err
 			}
@@ -259,7 +268,7 @@ func admissionResponseError(err error) *admission.AdmissionResponse {
 	}
 }
 
-func (r Rule) paintObject(object metaObject, logger zerolog.Logger) *admission.AdmissionResponse {
+func (r Rule) paintObject(object metaObject, fm map[string]string, logger zerolog.Logger) *admission.AdmissionResponse {
 	mylog := logger.With().Str("func", "paintObject").Logger()
 	reviewResponse := admission.AdmissionResponse{}
 	reviewResponse.Allowed = true
@@ -267,9 +276,9 @@ func (r Rule) paintObject(object metaObject, logger zerolog.Logger) *admission.A
 	if len(r.Additions.Labels) == 0 && len(r.Additions.Annotations) == 0 {
 		return admissionResponseError(fmt.Errorf("graffiti rule has no additional labels or annotations"))
 	}
-	patch, err := r.createObjectPatch(object)
+	patch, err := r.createObjectPatch(object, fm)
 	if err != nil {
-		return admissionResponseError(fmt.Errorf("could not create the json patch"))
+		return admissionResponseError(fmt.Errorf("could not create the json patch: %v", err))
 	}
 	mylog.Info().Bytes("patch", patch).Msg("created json patch")
 	reviewResponse.Patch = patch

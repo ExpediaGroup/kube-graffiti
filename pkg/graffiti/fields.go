@@ -11,8 +11,8 @@ import (
 )
 
 // makeFieldMap converts a raw json object into a compatible field map
-func makeFieldMap(raw []byte) (map[string]string, error) {
-	mylog := log.ComponentLogger(componentName, "makeFieldMap")
+func makeFieldMapFromRawObject(raw []byte) (map[string]string, error) {
+	mylog := log.ComponentLogger(componentName, "makeFieldMapFromRawObject")
 	fieldMap := make(map[string]string)
 	var jsonObject map[string]interface{}
 
