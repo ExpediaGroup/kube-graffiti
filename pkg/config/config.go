@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"regexp"
 	"strings"
 
 	"github.com/mitchellh/mapstructure"
@@ -195,15 +196,20 @@ func (c *Configuration) validateRules() error {
 		}
 
 		// validate all additions labels using kubernetes validation methods
+		templateRegex := regexp.MustCompile(`\{\{.*\}\}`)
 		if len(rule.Additions.Labels) > 0 {
 			for k, v := range rule.Additions.Labels {
 				if errorList := utilvalidation.IsQualifiedName(k); len(errorList) != 0 {
 					rulelog.Error().Str("label-key", k).Str("errors", strings.Join(errorList, "; ")).Msg("rule contains invalid additions label key")
 					return fmt.Errorf("rule %s contains invalid label key: %s", rule.Registration.Name, strings.Join(errorList, "; "))
 				}
-				if errorList := utilvalidation.IsValidLabelValue(v); len(errorList) != 0 {
-					rulelog.Error().Str("label-value", v).Msg("rule contains invalid additions label value")
-					return fmt.Errorf("rule %s contains invalid label value: %s", rule.Registration.Name, strings.Join(errorList, "; "))
+				if templateRegex.MatchString(v) {
+					rulelog.Info().Str("label-value", v).Msg("value contains a template - skipping validation")
+				} else {
+					if errorList := utilvalidation.IsValidLabelValue(v); len(errorList) != 0 {
+						rulelog.Error().Str("label-value", v).Msg("rule contains invalid additions label value")
+						return fmt.Errorf("rule %s contains invalid label value: %s", rule.Registration.Name, strings.Join(errorList, "; "))
+					}
 				}
 			}
 		}

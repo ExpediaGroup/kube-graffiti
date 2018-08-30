@@ -140,7 +140,7 @@ func initWebhookServer(c *config.Configuration, k *kubernetes.Clientset) error {
 		mylog.Info().Str("rule-name", rule.Registration.Name).Msg("adding graffiti rule")
 		server.AddGraffitiRule(graffiti.Rule{
 			Name:      rule.Registration.Name,
-			Matcher:   rule.Matcher,
+			Matchers:  rule.Matchers,
 			Additions: rule.Additions,
 		})
 	}
