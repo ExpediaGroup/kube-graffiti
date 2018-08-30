@@ -35,6 +35,9 @@ case $(uname -s) in
      ;;
 esac
 
+echo "Building kube-graffiti container"
+docker build --rm -t ${DEPLOYNAME}:dev .
+
 latest_k8s_version=$(minikube get-k8s-versions | head -2 | tail -1 | awk '{print $2}')
 if set_version=$(minikube config get kubernetes-version 2> /dev/null); then
   echo "Deploying kubernetes version: $set_version"
@@ -68,6 +71,5 @@ do
   [[ -f "testing/${template}.yaml" ]] && ./$kubectlbin apply -f testing/${template}.yaml
 done
 eval $(minikube docker-env)
-docker build --rm -t ${DEPLOYNAME}:dev .
 ./${kubectlbin} -n ${NAMESPACE} get deploy ${DEPLOYNAME} && ./${kubectlbin} -n ${NAMESPACE} delete deployment ${DEPLOYNAME}
 ./$kubectlbin create -f testing/deploy.yaml
