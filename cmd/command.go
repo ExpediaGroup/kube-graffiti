@@ -27,8 +27,36 @@ var (
 	rootCmd       = &cobra.Command{
 		Use:   "kube-grafitti",
 		Short: "Automatically add labels and/or annotations to kubernetes objects",
-		Long:  "Write rules that match labels and object fields and add labels/annotations to kubernetes objects as they are created via a mutating webhook.",
-		Run:   runRootCmd,
+		Long: `Write rules that match labels and object fields and add labels/annotations to kubernetes objects as they are created via a mutating webhook.
+Example:-
+kube-graffiti --config ./config.yaml
+
+config.yaml:-
+server:
+  namespace: kube-graffiti
+  service: kube-graffiti
+rules:
+- registration:
+  name: namespaces-istio-and-kiam
+  targets:
+  - api-groups:
+    - ""
+    api-versions:
+    - v1
+    resources:
+    - namespaces
+  failure-policy: Ignore
+  matchers:
+  label-selectors:
+  - "name notin (kube-system,kube-public,default)"
+  additions:
+  labels:
+    istio-injection: enabled
+  annotations:
+    iam.amazonaws.com/permitted: ".*"
+`,
+		PreRun: initRootCmd,
+		Run:    runRootCmd,
 	}
 )
 
@@ -54,9 +82,12 @@ func Execute() {
 	}
 }
 
+func initRootCmd(_ *cobra.Command, _ []string) {
+	log.InitLogger("info")
+}
+
 // runRootCmd is the main program which starts up our services and waits for them to complete
 func runRootCmd(_ *cobra.Command, _ []string) {
-	log.InitLogger("info")
 	mylog := log.ComponentLogger(componentName, "runRootCmd")
 
 	mylog.Info().Str("file", cfgFile).Msg("reading configuration file")

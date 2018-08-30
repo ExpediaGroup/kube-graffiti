@@ -66,9 +66,8 @@ func (s Server) StartWebhookServer(certPath, keyPath string) {
 	mylog.Debug().Str("certPath", certPath).Str("keyPath", keyPath).Msg("starting the secure webhook http server...")
 
 	// start the webhook server in a new routine
-	var err error
 	go func() {
-		if err = s.httpServer.ListenAndServeTLS(certPath, keyPath); err != nil {
+		if err := s.httpServer.ListenAndServeTLS(certPath, keyPath); err != nil {
 			mylog.Fatal().Err(err).Msg("failed to start the webhook server")
 		}
 	}()

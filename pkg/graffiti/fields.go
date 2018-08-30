@@ -73,7 +73,7 @@ func addFieldRecursive(fm map[string]string, prefix, k string, v interface{}) {
 			addFieldRecursive(fm, prefix+k+".", x, y)
 		}
 	default:
-		mylog.Debug().Str("key", prefix+k).Str("kind", reflect.ValueOf(v).Kind().String()).Msg("can't handle kind")
+		mylog.Warn().Str("key", prefix+k).Str("kind", reflect.ValueOf(v).Kind().String()).Msg("can't flatten this kind into a field map")
 	}
 	return
 }
