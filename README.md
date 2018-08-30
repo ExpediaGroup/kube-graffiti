@@ -432,4 +432,9 @@ metadata:
     app: kube-graffiti
 ```
 
-This is the minimal level of access required for *kube-graffiti* to operate as a mutating webhook.  If you want it to be able to update existing entires (not yet available) then you will need to give *kube-graffiti* **update** permissions on **all** objects that you want it to be able to modify. 
+This is the minimal level of access required for *kube-graffiti* to operate as a mutating webhook.  If you want it to be able to update existing entires (not yet available) then you will need to give *kube-graffiti* **update** permissions on **all** objects that you want it to be able to modify.
+
+Contributing
+------------
+
+Submit a PR to this repository, following the [contributors guide](http://https://github.com/HotelsDotCom/kube-graffiti/CONTRIBUTING.md).
