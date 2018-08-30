@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/mitchellh/mapstructure"
+	"github.com/rs/zerolog"
 	"github.com/spf13/viper"
 	apivalidation "k8s.io/apimachinery/pkg/api/validation"
 	utilvalidation "k8s.io/apimachinery/pkg/util/validation"
@@ -160,71 +161,92 @@ func (c *Configuration) validateRules() error {
 
 	existingRuleNames := make(map[string]bool)
 	for _, rule := range c.Rules {
-		rulelog := mylog.With().Str("rule", rule.Registration.Name).Logger()
-
-		// rules need to contain one or more label or annotation additions...
-		if len(rule.Additions.Labels) == 0 && len(rule.Additions.Annotations) == 0 {
-			rulelog.Error().Msg("invalid rule - it does not contain any additional labels or annotations")
-			return fmt.Errorf("rule %s is invalid - it does not contain any additional labels or annotations", rule.Registration.Name)
-		}
-
 		// rules can't have duplicate names...
 		if _, set := existingRuleNames[rule.Registration.Name]; set == true {
-			rulelog.Error().Msg("found duplicate rules with the same name, they must be unique")
+			mylog.Error().Str("rule", rule.Registration.Name).Msg("found duplicate rules with the same name, they must be unique")
 			return fmt.Errorf("rule %s is invalid - found duplicate rules with the same name, they must be unique", rule.Registration.Name)
 		}
 		existingRuleNames[rule.Registration.Name] = true
 
-		// all label selectors must be valid...
-		if len(rule.Matchers.LabelSelectors) > 0 {
-			for _, selector := range rule.Matchers.LabelSelectors {
-				if err := graffiti.ValidateLabelSelector(selector); err != nil {
-					rulelog.Error().Str("label-selector", selector).Msg("rule contains an invalid label selector")
-					return fmt.Errorf("rule %s is invalid - contains invalid label selector '%s': %v", rule.Registration.Name, selector, err)
+		if err := validateRule(rule); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func validateRule(rule Rule) error {
+	mylog := log.ComponentLogger(componentName, "validateRule")
+	rulelog := mylog.With().Str("rule", rule.Registration.Name).Logger()
+
+	if err := rule.validateRuleSelectors(rulelog); err != nil {
+		return err
+	}
+	if err := rule.validateRuleAdditions(rulelog); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (rule Rule) validateRuleSelectors(rulelog zerolog.Logger) error {
+	// all label selectors must be valid...
+	if len(rule.Matchers.LabelSelectors) > 0 {
+		for _, selector := range rule.Matchers.LabelSelectors {
+			if err := graffiti.ValidateLabelSelector(selector); err != nil {
+				rulelog.Error().Str("label-selector", selector).Msg("rule contains an invalid label selector")
+				return fmt.Errorf("rule %s is invalid - contains invalid label selector '%s': %v", rule.Registration.Name, selector, err)
+			}
+		}
+	}
+
+	// all field selectors must also be valid...
+	if len(rule.Matchers.FieldSelectors) > 0 {
+		for _, selector := range rule.Matchers.FieldSelectors {
+			if err := graffiti.ValidateFieldSelector(selector); err != nil {
+				rulelog.Error().Str("field-selector", selector).Msg("rule contains an invalid field selector")
+				return fmt.Errorf("rule %s is invalid - contains invalid field selector '%s': %v", rule.Registration.Name, selector, err)
+			}
+		}
+	}
+	return nil
+}
+
+func (rule Rule) validateRuleAdditions(rulelog zerolog.Logger) error {
+	// rules need to contain one or more label or annotation additions...
+	if len(rule.Additions.Labels) == 0 && len(rule.Additions.Annotations) == 0 {
+		rulelog.Error().Msg("invalid rule - it does not contain any additional labels or annotations")
+		return fmt.Errorf("rule %s is invalid - it does not contain any additional labels or annotations", rule.Registration.Name)
+	}
+
+	// validate all additions labels using kubernetes validation methods
+	templateRegex := regexp.MustCompile(`\{\{.*\}\}`)
+	if len(rule.Additions.Labels) > 0 {
+		for k, v := range rule.Additions.Labels {
+			if errorList := utilvalidation.IsQualifiedName(k); len(errorList) != 0 {
+				rulelog.Error().Str("label-key", k).Str("errors", strings.Join(errorList, "; ")).Msg("rule contains invalid additions label key")
+				return fmt.Errorf("rule %s contains invalid label key: %s", rule.Registration.Name, strings.Join(errorList, "; "))
+			}
+			if templateRegex.MatchString(v) {
+				rulelog.Info().Str("label-value", v).Msg("value contains a template - skipping validation")
+			} else {
+				if errorList := utilvalidation.IsValidLabelValue(v); len(errorList) != 0 {
+					rulelog.Error().Str("label-value", v).Msg("rule contains invalid additions label value")
+					return fmt.Errorf("rule %s contains invalid label value: %s", rule.Registration.Name, strings.Join(errorList, "; "))
 				}
 			}
 		}
+	}
 
-		// all field selectors must also be valid...
-		if len(rule.Matchers.FieldSelectors) > 0 {
-			for _, selector := range rule.Matchers.FieldSelectors {
-				if err := graffiti.ValidateFieldSelector(selector); err != nil {
-					rulelog.Error().Str("field-selector", selector).Msg("rule contains an invalid field selector")
-					return fmt.Errorf("rule %s is invalid - contains invalid field selector '%s': %v", rule.Registration.Name, selector, err)
-				}
+	// validate all additions annotations by using kubernetes validation methods
+	path := field.NewPath("metadata.annotations")
+	if len(rule.Additions.Annotations) > 0 {
+		if errorList := apivalidation.ValidateAnnotations(rule.Additions.Annotations, path); len(errorList) != 0 {
+			var info []string
+			for _, errorPart := range errorList.ToAggregate().Errors() {
+				info = append(info, errorPart.Error())
 			}
-		}
-
-		// validate all additions labels using kubernetes validation methods
-		templateRegex := regexp.MustCompile(`\{\{.*\}\}`)
-		if len(rule.Additions.Labels) > 0 {
-			for k, v := range rule.Additions.Labels {
-				if errorList := utilvalidation.IsQualifiedName(k); len(errorList) != 0 {
-					rulelog.Error().Str("label-key", k).Str("errors", strings.Join(errorList, "; ")).Msg("rule contains invalid additions label key")
-					return fmt.Errorf("rule %s contains invalid label key: %s", rule.Registration.Name, strings.Join(errorList, "; "))
-				}
-				if templateRegex.MatchString(v) {
-					rulelog.Info().Str("label-value", v).Msg("value contains a template - skipping validation")
-				} else {
-					if errorList := utilvalidation.IsValidLabelValue(v); len(errorList) != 0 {
-						rulelog.Error().Str("label-value", v).Msg("rule contains invalid additions label value")
-						return fmt.Errorf("rule %s contains invalid label value: %s", rule.Registration.Name, strings.Join(errorList, "; "))
-					}
-				}
-			}
-		}
-
-		// validate all additions annotations by using kubernetes validation methods
-		path := field.NewPath("metadata.annotations")
-		if len(rule.Additions.Annotations) > 0 {
-			if errorList := apivalidation.ValidateAnnotations(rule.Additions.Annotations, path); len(errorList) != 0 {
-				var info []string
-				for _, errorPart := range errorList.ToAggregate().Errors() {
-					info = append(info, errorPart.Error())
-				}
-				rulelog.Error().Str("errors", strings.Join(info, "; ")).Msg("rule contains invalid annotations")
-				return fmt.Errorf("rule %s contains invalid annotations: %s", rule.Registration.Name, strings.Join(info, "; "))
-			}
+			rulelog.Error().Str("errors", strings.Join(info, "; ")).Msg("rule contains invalid annotations")
+			return fmt.Errorf("rule %s contains invalid annotations: %s", rule.Registration.Name, strings.Join(info, "; "))
 		}
 	}
 	return nil
