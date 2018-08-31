@@ -95,7 +95,7 @@ func configTLS(clientset *kubernetes.Clientset) *tls.Config {
 func getAPIServerCert(clientset *kubernetes.Clientset) []byte {
 	mylog := log.ComponentLogger(componentName, "getAPIServerCert")
 	mylog.Debug().Msg("Starting getAPIServerCert")
-	c, err := clientset.CoreV1().ConfigMaps("kube-system").Get("extension-apiserver-authentication", metav1.GetOptions{})
+	c, err := clientset.CoreV1().ConfigMaps(metav1.NamespaceSystem).Get("extension-apiserver-authentication", metav1.GetOptions{})
 	if err != nil {
 		mylog.Fatal().Err(err).Msg("failed to read the extension-apiserver-authentication configmap")
 	}

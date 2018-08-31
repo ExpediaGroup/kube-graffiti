@@ -26,14 +26,6 @@
   version = "v1.4.7"
 
 [[projects]]
-  digest = "1:682dc7c0dd89949203b3f642f7babb121943ec36170c64ab69e2fe6de7647c59"
-  name = "github.com/getlantern/deepcopy"
-  packages = ["."]
-  pruneopts = ""
-  revision = "b923171e8640f94369e21e324b1b0465cb82ec9f"
-  version = "v1"
-
-[[projects]]
   digest = "1:b13707423743d41665fd23f0c36b2f37bb49c30e94adb813319c44188a51ba22"
   name = "github.com/ghodss/yaml"
   packages = ["."]
@@ -271,11 +263,11 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:793a79198b755828dec284c6f1325e24e09186f1b7ba818b65c7c35104ed86eb"
+  digest = "1:3ff237df1dca22c6296d2446c76ddcff8d359180ca53b8dcd301a44aa5c2f479"
   name = "golang.org/x/crypto"
   packages = ["ssh/terminal"]
   pruneopts = ""
-  revision = "614d502a4dac94afa3a6ce146bd1736da82514c6"
+  revision = "182538f80094b6a8efaade63a8fd8e0d9d5843dd"
 
 [[projects]]
   branch = "master"
@@ -293,14 +285,14 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:79b4fb7cfed68c4d0727858bd32dbe3be4b97ea58e2d767f92287f67810cbc98"
+  digest = "1:85fab7aaca4239017b02462635379f0b2203ab47961216c8e64b5fb48601ab4f"
   name = "golang.org/x/sys"
   packages = [
     "unix",
     "windows",
   ]
   pruneopts = ""
-  revision = "d99a578cf41bfccdeaf48b0845c823a4b8b0ad5e"
+  revision = "fa5fdf94c78965f1aa8423f0cc50b8b8d728b05a"
 
 [[projects]]
   digest = "1:5acd3512b047305d49e8763eef7ba423901e85d5dd2fd1e71778a0ea8de10bd4"
@@ -492,7 +484,6 @@
   analyzer-version = 1
   input-imports = [
     "github.com/cameront/go-jsonpatch",
-    "github.com/getlantern/deepcopy",
     "github.com/mitchellh/mapstructure",
     "github.com/rs/zerolog",
     "github.com/rs/zerolog/log",
