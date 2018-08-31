@@ -28,6 +28,7 @@ const (
 
 // All of our configuration modelled with mapstructure tags so that we can use viper to properly parse and load it for us.
 
+// Configuration models the structre of our configuration values loaded through viper.
 type Configuration struct {
 	_             string                    `mapstructure:"config"`
 	LogLevel      string                    `mapstructure:"log-level"`
@@ -37,6 +38,7 @@ type Configuration struct {
 	Rules         []Rule                    `mapstructure:"rules"`
 }
 
+// Server contains all the settings for the webhook https server and access from the kubernetes api.
 type Server struct {
 	WebhookPort    int    `mapstructure:"port"`
 	CompanyDomain  string `mapstructure:"company-domain"`
@@ -47,6 +49,7 @@ type Server struct {
 	ServerKeyPath  string `mapstructure:"key-path"`
 }
 
+// Rule models a single graffiti rule with three sections for managing registration, matching and the payload to graffiti on the object.
 type Rule struct {
 	Registration webhook.Registration `mapstructure:"registration"`
 	Matchers     graffiti.Matchers    `mapstructure:"matchers"`
@@ -97,7 +100,7 @@ func unmarshalFromViperStrict() (*Configuration, error) {
 	opts := decodeHookWithErrorUnused(decoderHookFunc)
 
 	if err := viper.Unmarshal(&c, opts); err != nil {
-		return &c, fmt.Errorf("Failed to unmarshal configuration: %v", err)
+		return &c, fmt.Errorf("failed to unmarshal configuration: %v", err)
 	}
 	return &c, nil
 }

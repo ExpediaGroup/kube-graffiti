@@ -19,10 +19,10 @@ const (
 	componentName = "grafitti"
 )
 
-type BooleanOperator int
-
 // BooleanOperator defines the logical boolean operator applied to label and field selector results.
 // It is AND by default, i.e. both label selector and field selector must match to
+type BooleanOperator int
+
 const (
 	AND BooleanOperator = iota
 	OR
@@ -57,6 +57,8 @@ type metaObject struct {
 	Meta metav1.ObjectMeta `json:"metadata"`
 }
 
+// Mutate takes an admission request and applies the graffiti rule against it, returning an admission response to the kube-api.
+// It performs the logic between selectors and the boolean-operator.
 func (r Rule) Mutate(req *admission.AdmissionRequest) *admission.AdmissionResponse {
 	mylog := log.ComponentLogger(componentName, "Mutate")
 	mylog = mylog.With().Str("rule", r.Name).Str("kind", req.Kind.String()).Str("name", req.Name).Str("namespace", req.Namespace).Logger()
@@ -139,6 +141,14 @@ func (r Rule) Mutate(req *admission.AdmissionRequest) *admission.AdmissionRespon
 
 	mylog.Info().Msg("rule matched - painting object")
 	return r.paintObject(metaObject, fieldMap, mylog)
+}
+
+// ValidateFieldSelector checks that a field selector parses correctly and is used when validating config
+func ValidateFieldSelector(selector string) error {
+	if _, err := fields.ParseSelector(selector); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (r Rule) matchLabelSelectors(object metaObject) (bool, error) {
@@ -247,14 +257,6 @@ func matchFieldSelector(selector string, target map[string]string) (bool, error)
 	}
 	selLog.Debug().Msg("selector matches")
 	return true, nil
-}
-
-// ValidateFieldSelector checks that a field selector parses correctly and is used when validating config
-func ValidateFieldSelector(selector string) error {
-	if _, err := fields.ParseSelector(selector); err != nil {
-		return err
-	}
-	return nil
 }
 
 func admissionResponseError(err error) *admission.AdmissionResponse {

@@ -213,7 +213,12 @@ func TestLabelSelectorMatchesName(t *testing.T) {
 	resp := rule.Mutate(review.Request)
 	assert.Equal(t, true, resp.Allowed, "the request should be successful")
 	assert.NotNil(t, resp.Patch)
-	assert.Equal(t, `[{"op":"add","path":"/metadata/labels/modified-by-graffiti","value":"abc123"}]`, string(resp.Patch))
+
+	// we have to test the patch objects because they have multiple values and can be ordered either way round preventing a simple string match.
+	desired, _ := jsonpatch.FromString(`[ { "op": "replace", "path": "/metadata/labels", "value": { "modified-by-graffiti": "abc123", "group": "runtime", "author": "david" }} ]`)
+	actual, err := jsonpatch.FromString(string(resp.Patch))
+	assert.NoError(t, err)
+	assert.EqualValues(t, desired.Operations, actual.Operations)
 }
 
 func TestMultipleLabelSelectorsAreORed(t *testing.T) {
@@ -232,7 +237,12 @@ func TestMultipleLabelSelectorsAreORed(t *testing.T) {
 	resp := rule.Mutate(review.Request)
 	assert.Equal(t, true, resp.Allowed, "the request should be successful")
 	assert.NotNil(t, resp.Patch)
-	assert.Equal(t, `[{"op":"add","path":"/metadata/labels/modified-by-graffiti","value":"abc123"}]`, string(resp.Patch))
+
+	// we have to test the patch objects because they have multiple values and can be ordered either way round preventing a simple string match.
+	desired, _ := jsonpatch.FromString(`[ { "op": "replace", "path": "/metadata/labels", "value": { "author": "david", "group": "runtime", "modified-by-graffiti": "abc123" }} ]`)
+	actual, err := jsonpatch.FromString(string(resp.Patch))
+	assert.NoError(t, err)
+	assert.EqualValues(t, desired.Operations, actual.Operations)
 }
 
 func TestHandlesNoSourceObjectLabels(t *testing.T) {
@@ -290,7 +300,7 @@ func TestHandlesNoSourceObjectLabels(t *testing.T) {
 	resp := rule.Mutate(review.Request)
 	assert.Equal(t, true, resp.Allowed, "the request should be successful")
 	assert.NotNil(t, resp.Patch)
-	assert.Equal(t, `[{"op":"add","path":"/metadata/labels","value":{"modified-by-graffiti":"abc123"}}]`, string(resp.Patch))
+	assert.Equal(t, `[ { "op": "add", "path": "/metadata/labels", "value": { "modified-by-graffiti": "abc123" }} ]`, string(resp.Patch))
 }
 
 func TestSimpleFieldSelectorMiss(t *testing.T) {
@@ -337,10 +347,10 @@ func TestMatchingSimpleFieldSelectorHit(t *testing.T) {
 	assert.NotNil(t, resp.Patch)
 
 	// we have to test the patch objects because they have multiple values and can be ordered either way round preventing a simple string match.
-	desired, _ := jsonpatch.FromString(`[{"op":"add","path":"/metadata/labels/modified-by-graffiti","value":"abc123"},{"op":"add","path":"/metadata/annotations/flash","value":"saviour of the universe"}]`)
+	desired, _ := jsonpatch.FromString(`[ { "op": "replace", "path": "/metadata/labels", "value": { "group": "runtime", "modified-by-graffiti": "abc123", "author": "david" }}, { "op": "replace", "path": "/metadata/annotations", "value": { "prometheus.io/path": "/metrics", "level": "v.special", "flash": "saviour of the universe" }} ]`)
 	actual, err := jsonpatch.FromString(string(resp.Patch))
 	assert.NoError(t, err)
-	assert.ElementsMatch(t, desired.Operations, actual.Operations)
+	assert.EqualValues(t, desired.Operations, actual.Operations)
 }
 
 func TestMatchingNegativeSimpleFieldSelector(t *testing.T) {
@@ -364,7 +374,7 @@ func TestMatchingNegativeSimpleFieldSelector(t *testing.T) {
 	assert.NotNil(t, resp.Patch)
 
 	// we have to test the patch objects because they have multiple values and can be ordered either way round preventing a simple string match.
-	desired, _ := jsonpatch.FromString(`[{"op":"add","path":"/metadata/labels/modified-by-graffiti","value":"abc123"},{"op":"add","path":"/metadata/annotations/flash","value":"saviour of the universe"}]`)
+	desired, _ := jsonpatch.FromString(`[ { "op": "replace", "path": "/metadata/labels", "value": { "group": "runtime", "author": "david", "modified-by-graffiti": "abc123" }}, { "op": "replace", "path": "/metadata/annotations", "value": { "level": "v.special", "prometheus.io/path": "/metrics", "flash": "saviour of the universe" }} ]`)
 	actual, err := jsonpatch.FromString(string(resp.Patch))
 	assert.NoError(t, err)
 	assert.ElementsMatch(t, desired.Operations, actual.Operations)
@@ -391,7 +401,7 @@ func TestSuccessfullCombinedFieldSelector(t *testing.T) {
 	assert.NotNil(t, resp.Patch)
 
 	// we have to test the patch objects because they have multiple values and can be ordered either way round preventing a simple string match.
-	desired, _ := jsonpatch.FromString(`[{"op":"add","path":"/metadata/labels/modified-by-graffiti","value":"abc123"},{"op":"add","path":"/metadata/annotations/flash","value":"saviour of the universe"}]`)
+	desired, _ := jsonpatch.FromString(`[ { "op": "replace", "path": "/metadata/labels", "value": { "author": "david", "group": "runtime", "modified-by-graffiti": "abc123" }}, { "op": "replace", "path": "/metadata/annotations", "value": { "level": "v.special", "flash": "saviour of the universe", "prometheus.io/path": "/metrics" }} ]`)
 	actual, err := jsonpatch.FromString(string(resp.Patch))
 	assert.NoError(t, err)
 	assert.ElementsMatch(t, desired.Operations, actual.Operations)
@@ -457,7 +467,7 @@ func TestORMultipleFieldSelectors(t *testing.T) {
 	assert.NotNil(t, resp.Patch)
 
 	// we have to test the patch objects because they have multiple values and can be ordered either way round preventing a simple string match.
-	desired, _ := jsonpatch.FromString(`[{"op":"add","path":"/metadata/labels/modified-by-graffiti","value":"abc123"},{"op":"add","path":"/metadata/annotations/flash","value":"saviour of the universe"}]`)
+	desired, _ := jsonpatch.FromString(`[ { "op": "replace", "path": "/metadata/labels", "value": { "author": "david", "group": "runtime", "modified-by-graffiti": "abc123" }}, { "op": "replace", "path": "/metadata/annotations", "value": { "level": "v.special", "prometheus.io/path": "/metrics", "flash": "saviour of the universe" }} ]`)
 	actual, err := jsonpatch.FromString(string(resp.Patch))
 	assert.NoError(t, err)
 	assert.ElementsMatch(t, desired.Operations, actual.Operations)
@@ -484,7 +494,7 @@ func TestMatchingComplexFieldSelectorHit(t *testing.T) {
 	assert.NotNil(t, resp.Patch)
 
 	// we have to test the patch objects because they have multiple values and can be ordered either way round preventing a simple string match.
-	desired, _ := jsonpatch.FromString(`[{"op":"add","path":"/metadata/labels/modified-by-graffiti","value":"abc123"},{"op":"add","path":"/metadata/annotations/flash","value":"saviour of the universe"}]`)
+	desired, _ := jsonpatch.FromString(`[ { "op": "replace", "path": "/metadata/labels", "value": { "group": "runtime", "modified-by-graffiti": "abc123", "author": "david" }}, { "op": "replace", "path": "/metadata/annotations", "value": { "level": "v.special", "prometheus.io/path": "/metrics", "flash": "saviour of the universe" }} ]`)
 	actual, err := jsonpatch.FromString(string(resp.Patch))
 	assert.NoError(t, err)
 	assert.ElementsMatch(t, desired.Operations, actual.Operations)
@@ -564,7 +574,7 @@ func TestAnEmptySelectorAlwaysMatchesWithAND(t *testing.T) {
 	assert.Equal(t, true, resp.Allowed, "the request should be successful")
 	assert.NotNil(t, resp.Patch)
 	// we have to test the patch objects because they have multiple values and can be ordered either way round preventing a simple string match.
-	desired, _ := jsonpatch.FromString(`[{"op":"add","path":"/metadata/labels/modified-by-graffiti","value":"abc123"},{"op":"add","path":"/metadata/annotations/flash","value":"saviour of the universe"}]`)
+	desired, _ := jsonpatch.FromString(`[ { "op": "replace", "path": "/metadata/labels", "value": { "author": "david", "group": "runtime", "modified-by-graffiti": "abc123" }}, { "op": "replace", "path": "/metadata/annotations", "value": { "prometheus.io/path": "/metrics", "level": "v.special", "flash": "saviour of the universe" }} ]`)
 	actual, err := jsonpatch.FromString(string(resp.Patch))
 	assert.NoError(t, err)
 	assert.ElementsMatch(t, desired.Operations, actual.Operations)
@@ -594,7 +604,7 @@ func TestLabelAndFieldSelectorsORSelected(t *testing.T) {
 	assert.Equal(t, true, resp.Allowed, "the request should be successful")
 	assert.NotNil(t, resp.Patch)
 	// we have to test the patch objects because they have multiple values and can be ordered either way round preventing a simple string match.
-	desired, _ := jsonpatch.FromString(`[{"op":"add","path":"/metadata/labels/modified-by-graffiti","value":"abc123"},{"op":"add","path":"/metadata/annotations/flash","value":"saviour of the universe"}]`)
+	desired, _ := jsonpatch.FromString(`[ { "op": "replace", "path": "/metadata/labels", "value": { "author": "david", "group": "runtime", "modified-by-graffiti": "abc123" }}, { "op": "replace", "path": "/metadata/annotations", "value": { "prometheus.io/path": "/metrics", "level": "v.special", "flash": "saviour of the universe" }} ]`)
 	actual, err := jsonpatch.FromString(string(resp.Patch))
 	assert.NoError(t, err)
 	assert.ElementsMatch(t, desired.Operations, actual.Operations)
@@ -650,7 +660,7 @@ func TestLabelAndFieldSelectorsXORSelectedWithSingleMatch(t *testing.T) {
 	assert.Equal(t, true, resp.Allowed, "the request should be successful")
 	assert.NotNil(t, resp.Patch)
 	// we have to test the patch objects because they have multiple values and can be ordered either way round preventing a simple string match.
-	desired, _ := jsonpatch.FromString(`[{"op":"add","path":"/metadata/labels/modified-by-graffiti","value":"abc123"},{"op":"add","path":"/metadata/annotations/flash","value":"saviour of the universe"}]`)
+	desired, _ := jsonpatch.FromString(`[ { "op": "replace", "path": "/metadata/labels", "value": { "author": "david", "group": "runtime", "modified-by-graffiti": "abc123" }}, { "op": "replace", "path": "/metadata/annotations", "value": { "prometheus.io/path": "/metrics", "level": "v.special", "flash": "saviour of the universe" }} ]`)
 	actual, err := jsonpatch.FromString(string(resp.Patch))
 	assert.NoError(t, err)
 	assert.ElementsMatch(t, desired.Operations, actual.Operations)

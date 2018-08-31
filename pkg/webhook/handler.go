@@ -53,7 +53,7 @@ func (h graffitiHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" {
 		reqLog.Error().Str("method", r.Method).Msg("received invalid method, expecting POST")
 		w.Header().Set("Content-Type", "text/plain")
-		w.WriteHeader(http.StatusInternalServerError)
+		w.WriteHeader(http.StatusMethodNotAllowed)
 		io.WriteString(w, `invalid http method`)
 		return
 	}
@@ -63,7 +63,7 @@ func (h graffitiHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if contentType != "application/json" {
 		reqLog.Error().Str("content-type", contentType).Msg("bad content-type - not application/json")
 		w.Header().Set("Content-Type", "text/plain")
-		w.WriteHeader(http.StatusInternalServerError)
+		w.WriteHeader(http.StatusBadRequest)
 		io.WriteString(w, `invalid request - payload is not json`)
 		return
 	}
@@ -75,7 +75,7 @@ func (h graffitiHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	d.DisallowUnknownFields()
 	if err := d.Decode(&ar); err != nil {
 		w.Header().Set("Content-Type", "text/plain")
-		w.WriteHeader(http.StatusInternalServerError)
+		w.WriteHeader(http.StatusBadRequest)
 		io.WriteString(w, `The request does not contain a valid AdmissionReview object`)
 		reqLog.Error().Err(err).Msg("failed to decode AdmissionReview request")
 		return
@@ -85,7 +85,7 @@ func (h graffitiHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	reviewResponse := &admission.AdmissionResponse{}
 	// check that we have a Graffiti matching this URL path...
 	if mutator, ok := h.tagmap[url]; !ok {
-		reqLog.Error().Str("path", url).Msg("can't find a grafitti rule for path")
+		reqLog.Warn().Str("path", url).Msg("can't find a grafitti rule for path")
 		reviewResponse.Allowed = true
 	} else {
 		reqLog.Debug().Str("path", url).Msg("found a graffiti rule for path")
