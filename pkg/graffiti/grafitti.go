@@ -145,17 +145,17 @@ func (r Rule) matchLabelSelectors(object metaObject) (bool, error) {
 	mylog := log.ComponentLogger(componentName, "matchLabelSelectors")
 	// test if we matched any of the label selectors
 	if len(r.Matchers.LabelSelectors) != 0 {
-		// add name and namespace as labels so they can be matched with the label selector
-		if len(object.Meta.Labels) == 0 {
-			object.Meta.Labels = make(map[string]string)
-		}
+		sourceLabels := make(map[string]string)
 		// make it so we can use name and namespace as label selectors
-		object.Meta.Labels["name"] = object.Meta.Name
-		object.Meta.Labels["namespace"] = object.Meta.Namespace
+		sourceLabels["name"] = object.Meta.Name
+		sourceLabels["namespace"] = object.Meta.Namespace
+		for k, v := range object.Meta.Labels {
+			sourceLabels[k] = v
+		}
 
 		for _, selector := range r.Matchers.LabelSelectors {
 			mylog.Debug().Str("label-selector", selector).Msg("testing label selector")
-			selectorMatch, err := matchLabelSelector(selector, object.Meta.Labels)
+			selectorMatch, err := matchLabelSelector(selector, sourceLabels)
 			if err != nil {
 				return false, err
 			}
@@ -278,10 +278,10 @@ func (r Rule) paintObject(object metaObject, fm map[string]string, logger zerolo
 	}
 	patch, err := r.createObjectPatch(object, fm)
 	if err != nil {
-		return admissionResponseError(fmt.Errorf("could not create the json patch: %v", err))
+		return admissionResponseError(fmt.Errorf("could not create json patch: %v", err))
 	}
-	mylog.Info().Bytes("patch", patch).Msg("created json patch")
-	reviewResponse.Patch = patch
+	mylog.Info().Str("patch", patch).Msg("created json patch")
+	reviewResponse.Patch = []byte(patch)
 	pt := admission.PatchTypeJSONPatch
 	reviewResponse.PatchType = &pt
 	return &reviewResponse

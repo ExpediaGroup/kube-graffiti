@@ -25,52 +25,28 @@ var (
 	componentName = "cmd"
 	cfgFile       string
 	rootCmd       = &cobra.Command{
-		Use:   "kube-grafitti",
-		Short: "Automatically add labels and/or annotations to kubernetes objects",
-		Long: `Write rules that match labels and object fields and add labels/annotations to kubernetes objects as they are created via a mutating webhook.
-Example:-
-kube-graffiti --config ./config.yaml
-
-config.yaml:-
-server:
-  namespace: kube-graffiti
-  service: kube-graffiti
-rules:
-- registration:
-  name: namespaces-istio-and-kiam
-  targets:
-  - api-groups:
-    - ""
-    api-versions:
-    - v1
-    resources:
-    - namespaces
-  failure-policy: Ignore
-  matchers:
-  label-selectors:
-  - "name notin (kube-system,kube-public,default)"
-  additions:
-  labels:
-    istio-injection: enabled
-  annotations:
-    iam.amazonaws.com/permitted: ".*"
-`,
-		PreRun: initRootCmd,
-		Run:    runRootCmd,
+		Use:     "kube-grafitti",
+		Short:   "Automatically add labels and/or annotations to kubernetes objects",
+		Long:    `Write rules that match labels and object fields and add labels/annotations to kubernetes objects as they are created via a mutating webhook.`,
+		Example: `kube-graffiti --config ./config.yaml`,
+		PreRun:  initRootCmd,
+		Run:     runRootCmd,
 	}
 )
 
 // init defines command-line and environment arguments
 func init() {
-	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is /config.{yaml,json,toml,hcl})")
+	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "/config", "[GRAFFITI_CONFIG] config file (default is /config.{yaml,json,toml,hcl})")
+	viper.BindPFlag("config", rootCmd.PersistentFlags().Lookup("config"))
 	rootCmd.PersistentFlags().String("log-level", config.DefaultLogLevel, "[GRAFFITI_LOG_LEVEL] set logging verbosity to one of panic, fatal, error, warn, info, debug")
 	viper.BindPFlag("log-level", rootCmd.PersistentFlags().Lookup("log-level"))
+	// viper.BindEnv("log-level", "GRAFFITI_LOG_LEVEL")
 	rootCmd.PersistentFlags().Bool("check-existing", false, "[GRAFFITTI_CHECK_EXISTING] run rules against existing objects")
 	viper.BindPFlag("check-existing", rootCmd.PersistentFlags().Lookup("check-existing"))
 
 	// set up Viper environment variable binding...
 	replacer := strings.NewReplacer("-", "_", ".", "_")
-	viper.SetEnvPrefix("GRAFFITI_")
+	viper.SetEnvPrefix("GRAFFITI")
 	viper.SetEnvKeyReplacer(replacer)
 	viper.AutomaticEnv()
 }
@@ -83,21 +59,23 @@ func Execute() {
 }
 
 func initRootCmd(_ *cobra.Command, _ []string) {
-	log.InitLogger("info")
+	log.InitLogger(viper.GetString("log-level"))
 }
 
 // runRootCmd is the main program which starts up our services and waits for them to complete
 func runRootCmd(_ *cobra.Command, _ []string) {
 	mylog := log.ComponentLogger(componentName, "runRootCmd")
 
-	mylog.Info().Str("file", cfgFile).Msg("reading configuration file")
-	config, err := config.LoadConfig(cfgFile)
+	mylog.Info().Str("file", viper.GetString("config")).Msg("reading configuration file")
+	config, err := config.LoadConfig(viper.GetString("config"))
 	if err != nil {
 		mylog.Fatal().Err(err).Msg("failed to load config")
 	}
+
 	mylog.Info().Str("level", viper.GetString("log-level")).Msg("Setting log-level to configured level")
 	log.ChangeLogLevel(viper.GetString("log-level"))
 	mylog = log.ComponentLogger(componentName, "runRootCmd")
+	mylog.Info().Str("log-level", viper.GetString("log-level")).Msg("This is the log level")
 
 	mylog.Info().Msg("configuration read ok")
 	mylog.Debug().Msg("validating config")

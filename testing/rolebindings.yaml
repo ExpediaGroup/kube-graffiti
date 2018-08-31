@@ -7,7 +7,7 @@ metadata:
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: manage-webhooks
+  name: manage-mutating-webhooks
 subjects:
   - kind: ServiceAccount
     name: kube-graffiti
@@ -16,7 +16,7 @@ subjects:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
-  name: read-apiserver-authentication
+  name: kube-graffiti-read-apiserver-authentication
   namespace: kube-system
   labels:
     app: kube-graffiti
@@ -24,6 +24,21 @@ roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
   name: read-apiserver-authentication
+subjects:
+  - kind: ServiceAccount
+    name: kube-graffiti
+    namespace: kube-graffiti
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: kube-graffiti-list-namespaces
+  labels:
+    app: kube-graffiti
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: list-namespaces
 subjects:
   - kind: ServiceAccount
     name: kube-graffiti

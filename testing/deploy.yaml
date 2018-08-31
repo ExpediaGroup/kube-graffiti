@@ -6,7 +6,7 @@ metadata:
   labels:
     app: kube-graffiti
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app: kube-graffiti
@@ -19,17 +19,14 @@ spec:
       containers:
         - name: kube-graffiti
           image: kube-graffiti:dev
-          args:
-          - --config
-          - /config/graffiti-config.yaml
-          - --log-level
-          - debug
           imagePullPolicy: Never
           env:
             - name: GRAFFITI_LOG_LEVEL
               value: debug
             - name: GRAFFITI_CHECK_EXISTING
               value: "false"
+            - name: GRAFFITI_CONFIG
+              value: "/config/graffiti-config.yaml"
           volumeMounts:
           - name: webhook-certs
             mountPath: /tls

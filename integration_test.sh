@@ -35,9 +35,6 @@ case $(uname -s) in
      ;;
 esac
 
-echo "Building kube-graffiti container"
-docker build --rm -t ${DEPLOYNAME}:dev .
-
 latest_k8s_version=$(minikube get-k8s-versions | head -2 | tail -1 | awk '{print $2}')
 if set_version=$(minikube config get kubernetes-version 2> /dev/null); then
   echo "Deploying kubernetes version: $set_version"
@@ -58,6 +55,10 @@ if ! minikube_running; then
   echo "Starting minikube"
   minikube start
 fi
+
+eval $(minikube docker-env)
+echo "Building kube-graffiti container"
+docker build --rm -t ${DEPLOYNAME}:dev .
 
 if [[ ! -f "./${kubectlbin}" ]]; then
   [[ "${codebase}" == "" ]] && echo "No kubectl and can't work out codebase to download" && exit 1

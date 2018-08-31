@@ -29,6 +29,7 @@ const (
 // All of our configuration modelled with mapstructure tags so that we can use viper to properly parse and load it for us.
 
 type Configuration struct {
+	_             string                    `mapstructure:"config"`
 	LogLevel      string                    `mapstructure:"log-level"`
 	CheckExisting bool                      `mapstructure:"check-existing"`
 	HealthChecker healthcheck.HealthChecker `mapstructure:"health-checker"`

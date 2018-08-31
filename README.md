@@ -40,6 +40,7 @@ rules:
     labels:
       istio-injection: enabled
 ```
+*note* - 'name' and 'namespace' metadata fields can be used as though they are labels in our label-selectors.
 
 **Annotating specific Namespaces to Enable Kiam**
 ```
@@ -58,16 +59,15 @@ rules:
       - namespaces
     failure-policy: Ignore
   matchers:
-    label-selectors:
-    - "name=team-a"
-    - "name=team-b"
-    - "name=team-c"
+    field-selectors:
+    - "metadata.name=team-a"
+    - "metadata.name=team-b"
+    - "metadata.name=team-c"
   additions:
     annotations:
       iam.amazonaws.com/permitted: ".*"
 ```
 *note1* - a list of matcher label or field selectors are evaluated as an logical **OR**, and comma separated selectors within a single selector is treated as a logical **AND**
-*note2* - 'names' and 'namespaces' can be used within rule label-selectors as though they are actually present as labels.
 
 **Add a 'name' label to each namespace (i.e. useful for native kubernetes label selectors)**
 ```
@@ -89,8 +89,8 @@ rules:
     labels:
       name: '{{ index . "metadata.name" }}'
 ```
-*note1* - a rule without any matcher section will match **everything**
-*note2* - additions can be golang templates which can use object fields values
+*note1* - a rule without any matcher section will match **ALL**
+*note2* - addition values can be golang templates (but not keys)
 
 **Add ownership labels to certain objects in the 'Mobile' team's namespace**
 
@@ -346,6 +346,7 @@ kubernetes RBAC rules
 
 * read the configmap 'extension-apiserver-authentication' in the 'kube-system' namespace
 * create, delete 'mutatingwebhookconfigurations'
+* list namespaces - used for the health-check
 
 The following kubernetes objects configure this basic access, assuming that you choose to run kube-graffiti in its own namespace 'kube-graffiti': -
 
@@ -385,6 +386,21 @@ rules:
       - get
       - create
       - delete
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: list-namespaces
+  labels:
+    app: kube-graffiti
+rules:
+  - apiGroups:
+      - ""
+    resources:
+      - namespaces
+    verbs:
+      - get
+      - list
 ```
 
 **role bindings**
@@ -415,6 +431,21 @@ roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
   name: manage-mutating-webhooks
+subjects:
+  - kind: ServiceAccount
+    name: kube-graffiti
+    namespace: kube-graffiti
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: kube-graffiti-list-namespaces
+  labels:
+    app: kube-graffiti
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: list-namespaces
 subjects:
   - kind: ServiceAccount
     name: kube-graffiti
