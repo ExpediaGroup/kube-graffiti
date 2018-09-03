@@ -1,0 +1,12 @@
+kind: Service
+apiVersion: v1
+metadata:
+  name: kube-graffiti
+  namespace: kube-graffiti
+spec:
+  selector:
+    app: kube-graffiti
+  ports:
+  - protocol: TCP
+    port: 443
+    targetPort: 8443

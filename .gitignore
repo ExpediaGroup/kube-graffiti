@@ -1,0 +1,7 @@
+kube-graffiti
+.idea
+.vscode
+debug
+**/debug.test
+kubectl
+.DS_Store

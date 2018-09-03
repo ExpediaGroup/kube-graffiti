@@ -1,0 +1,57 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kube-graffiti
+  namespace: kube-graffiti
+  labels:
+    app: kube-graffiti
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kube-graffiti
+  template:
+    metadata:
+      labels:
+        app: kube-graffiti
+    spec:
+      serviceAccount: kube-graffiti
+      containers:
+        - name: kube-graffiti
+          image: kube-graffiti:dev
+          imagePullPolicy: Never
+          env:
+            - name: GRAFFITI_LOG_LEVEL
+              value: debug
+            - name: GRAFFITI_CHECK_EXISTING
+              value: "false"
+            - name: GRAFFITI_CONFIG
+              value: "/config/graffiti-config.yaml"
+          volumeMounts:
+          - name: webhook-certs
+            mountPath: /tls
+          - name: config
+            mountPath: /config
+          ports:
+            - containerPort: 8443
+          livenessProbe:
+            httpGet:
+              path: /am-i-healthy
+              port: 9999
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 3
+          readinessProbe:
+            httpGet:
+              path: /am-i-healthy
+              port: 9999
+            periodSeconds: 10
+            timeoutSeconds: 3
+      volumes:
+      - name: webhook-certs
+        secret:
+          secretName: kube-graffiti-certs
+      - name: config
+        configMap:
+          name: kube-graffiti-config
+
