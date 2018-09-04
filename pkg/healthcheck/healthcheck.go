@@ -31,19 +31,19 @@ type kubernetesNamespaceAccessor interface {
 }
 
 // CutDownKubernetesClient wraps a real kubernetes client and implements the kubernetesNamespaceAccessor interface
-type CutDownKubernetesClient struct {
+type cutDownKubernetesClient struct {
 	client *kubernetes.Clientset
 }
 
 // In our kubernetes client type we know how to get namespaces without needing to know that
 // namespaces are in fact in CoreV1.
-func (real CutDownKubernetesClient) namespaces() kubernetesNamespaceAccessor {
+func (real cutDownKubernetesClient) namespaces() kubernetesNamespaceAccessor {
 	return real.client.CoreV1().Namespaces()
 }
 
 // NewCutDownNamespaceClient converts a full blown kubernetes clientset into a cut down one that implements the kubernetesNamespaceAccessor interface
-func NewCutDownNamespaceClient(k *kubernetes.Clientset) CutDownKubernetesClient {
-	return CutDownKubernetesClient{client: k}
+func NewCutDownNamespaceClient(k *kubernetes.Clientset) cutDownKubernetesClient {
+	return cutDownKubernetesClient{client: k}
 }
 
 func NewHealthChecker(k kubernetesClient, port int, path string) HealthChecker {

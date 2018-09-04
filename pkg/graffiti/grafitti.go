@@ -59,6 +59,7 @@ type metaObject struct {
 
 // Mutate takes an admission request and applies the graffiti rule against it, returning an admission response to the kube-api.
 // It performs the logic between selectors and the boolean-operator.
+// It implements the graffitiMutator interface and so can be added to the webhook handler's tagmap
 func (r Rule) Mutate(req *admission.AdmissionRequest) *admission.AdmissionResponse {
 	mylog := log.ComponentLogger(componentName, "Mutate")
 	mylog = mylog.With().Str("rule", r.Name).Str("kind", req.Kind.String()).Str("name", req.Name).Str("namespace", req.Namespace).Logger()

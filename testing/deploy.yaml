@@ -24,7 +24,7 @@ spec:
             - name: GRAFFITI_LOG_LEVEL
               value: debug
             - name: GRAFFITI_CHECK_EXISTING
-              value: "false"
+              value: "true"
             - name: GRAFFITI_CONFIG
               value: "/config/graffiti-config.yaml"
           volumeMounts:

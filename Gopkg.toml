@@ -20,14 +20,14 @@
 #  version = "2.4.0"
 
 [[constraint]]
-  branch = "release-1.10"
+  branch = "release-1.11"
   name = "k8s.io/api"
 
 [[constraint]]
-  branch = "release-1.10"
+  branch = "release-1.11"
   name = "k8s.io/apimachinery"
 
 [[constraint]]
   name = "k8s.io/client-go"
-  version = "v7.0.0"
+  version = "v8.0.0"
 
