@@ -178,7 +178,7 @@ func initExistingCheck(config *config.Configuration, r *rest.Config) error {
 	mylog := log.ComponentLogger(componentName, "initExistingCheck")
 
 	var err error
-	if viper.GetBool("check-existing") {
+	if !viper.IsSet("check-existing") || viper.GetString("check-existing") != "true" {
 		mylog.Info().Msg("checking of existing objects is disabled")
 		return nil
 	}
