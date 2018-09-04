@@ -1,3 +1,4 @@
+// existing handles the checking of Graffiti rules against already existing objects within Kubernetes.
 package existing
 
 import (
