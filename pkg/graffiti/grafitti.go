@@ -222,7 +222,7 @@ func (r Rule) matchLabelSelectors(object metaObject) (bool, error) {
 
 		for _, selector := range r.Matchers.LabelSelectors {
 			mylog.Debug().Str("label-selector", selector).Msg("testing label selector")
-			selectorMatch, err := matchLabelSelector(selector, sourceLabels)
+			selectorMatch, err := MatchLabelSelector(selector, sourceLabels)
 			if err != nil {
 				return false, err
 			}
@@ -235,9 +235,10 @@ func (r Rule) matchLabelSelectors(object metaObject) (bool, error) {
 	return false, nil
 }
 
-// matchSelector will apply a kubernetes labels.Selector to a map[string]string and return a matched bool and error.
-func matchLabelSelector(selector string, target map[string]string) (bool, error) {
-	mylog := log.ComponentLogger(componentName, "matchLabelSelector")
+// MatchLabelSelector will apply a kubernetes labels.Selector to a map[string]string and return a matched bool and error.
+// It is exported so that it can be used in 'existing' package for processing namespace selectors.
+func MatchLabelSelector(selector string, target map[string]string) (bool, error) {
+	mylog := log.ComponentLogger(componentName, "MatchLabelSelector")
 	selLog := mylog.With().Str("selector", selector).Logger()
 
 	realSelector, err := labels.Parse(selector)

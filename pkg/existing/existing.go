@@ -2,6 +2,8 @@
 package existing
 
 import (
+	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -13,6 +15,7 @@ import (
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/rest"
 	"stash.hcom/run/kube-graffiti/pkg/config"
+	"stash.hcom/run/kube-graffiti/pkg/graffiti"
 	"stash.hcom/run/kube-graffiti/pkg/log"
 	"stash.hcom/run/kube-graffiti/pkg/webhook"
 )
@@ -239,17 +242,109 @@ func checkResourceType(rule *config.Rule, gv string, resource metav1.APIResource
 // checkObject takes a single kubernete object and decides whether to graffiti it or not.
 func checkObject(rule *config.Rule, gv string, object unstructured.Unstructured) {
 	mylog := log.ComponentLogger(componentName, "checkObject")
-	rlog := mylog.With().Str("rule", rule.Registration.Name).Str("group-version", gv).Str("kind", object.GetKind()).Str("name", object.GetName()).Logger()
+	kind := object.GetKind()
+	name := object.GetName()
+	rlog := mylog.With().Str("rule", rule.Registration.Name).Str("group-version", gv).Str("kind", kind).Str("name", name).Logger()
 	rlog.Info().Msg("checking object")
 
-	/*	mo = metaObject{}
-		b, err := json.Marshal(item.Object)
+	// match against optional rule namespace selector
+	if rule.Registration.NamespaceSelector != "" {
+		match, err := matchNamespaceSelector(object.Object, rule.Registration.NamespaceSelector)
 		if err != nil {
-			rlog.Error().Err(err).Msg("failed to marshall unstructured object")
-			continue
+			rlog.Error().Err(err).Msg("error checking object against namespace selector")
 		}
-		if err := json.Unmarshal(b, &mo); err != nil {
-			rlog.Error().Err(err).Msg("failed to unmarshall json into a metadata object")
+		if !match {
+			rlog.Info().Msg("object does not match namespace selector")
+			return
 		}
-		spew.Dump(mo) */
+	}
+
+	rlog.Info().Msg("applying graffiti mutate rule to existing object")
+	gr := graffiti.Rule{
+		Name:      rule.Registration.Name,
+		Matchers:  rule.Matchers,
+		Additions: rule.Additions,
+	}
+	raw, err := json.Marshal(object.Object)
+	if err != nil {
+		rlog.Error().Err(err).Msg("could not marshal object")
+		return
+	}
+	// call the graffiti package to evaluation the graffiti rule...
+	patch, err := gr.Mutate(raw)
+	if err != nil {
+		rlog.Error().Err(err).Msg("could not mutate object")
+		return
+	}
+	if patch != nil {
+		rlog.Info().Str("patch", string(patch)).Msg("mutate produced a patch")
+	}
+}
+
+// matchNamespaceSelector decides whether the object/object's namespace matches the namespace selector provided.
+// If the object is a namespace then it uses its own labels, otherwise the namespace is looked up and used.
+// Cluster scoped objects can not match a namespace selector.
+// Namespaces without labels can match a namespace selector with a negative match expression.
+func matchNamespaceSelector(obj map[string]interface{}, selector string) (bool, error) {
+	mylog := log.ComponentLogger(componentName, "matchNamespaceSelector")
+	mlog := mylog.With().Str("selector", selector).Logger()
+	var labels map[string]string
+
+	meta, ok := obj["metadata"].(map[string]interface{})
+	if !ok {
+		mlog.Error().Msg("object has no metadata")
+		return false, errors.New("the object is missing metadata")
+	}
+
+	name := meta["namespace"].(string)
+	kind := obj["kind"].(string)
+	if len(name) == 0 && kind != "Namespace" {
+		// Cluster scoped resources (except namespaces) can not match a namespace selector!
+		mlog.Debug().Msg("a cluster scoped object can not match any namespace selector")
+		return false, nil
+	}
+
+	if kind == "Namespace" {
+		mlog.Debug().Msg("object is a namespace using obj metadata labels")
+		labels = labelsFromMeta(meta)
+	} else {
+		mlog.Debug().Str("namespace", name).Msg("object is not a namespace, looking up namespace labels")
+		grv := schema.GroupVersionResource{
+			Group:    "",
+			Version:  "v1",
+			Resource: "namespaces",
+		}
+		ri := dynamicClient.Resource(grv)
+		ns, err := ri.Get(name, metav1.GetOptions{})
+		if err != nil {
+			mlog.Error().Str("namespace", name).Err(err).Msg("error looking up namespace")
+			return false, fmt.Errorf("could not look up namespace %s in kubernetes: %v", name, err)
+		}
+		nsMeta, ok := ns.Object["metadata"].(map[string]interface{})
+		if !ok {
+			mlog.Error().Str("namespace", name).Err(err).Msg("could not get namespace metadata")
+			return false, fmt.Errorf("could not get namespace metadata")
+		}
+		labels = labelsFromMeta(nsMeta)
+	}
+
+	return graffiti.MatchLabelSelector(selector, labels)
+}
+
+func labelsFromMeta(meta map[string]interface{}) map[string]string {
+	mylog := log.ComponentLogger(componentName, "labelsFromMeta")
+	labels := make(map[string]string)
+
+	l, ok := meta["labels"].(map[string]interface{})
+	if !ok {
+		mylog.Debug().Msg("metadata has no labels or can't be mapped")
+		return labels
+	}
+	for k, v := range l {
+		labels[k], ok = v.(string)
+		if !ok {
+			mylog.Error().Msg("can not assert label value is a string")
+		}
+	}
+	return labels
 }
