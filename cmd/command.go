@@ -182,9 +182,11 @@ func initExistingCheck(config *config.Configuration, r *rest.Config) error {
 		mylog.Info().Msg("checking of existing objects is disabled")
 		return nil
 	}
-	if err = existing.CheckExistingObjects(config.Rules, r); err != nil {
+	if err = existing.InitKubeClients(r); err != nil {
 		return err
 	}
+	existing.CheckExistingObjects(config.Rules)
+
 	mylog.Info().Msg("check of existing objects completed successfully")
 
 	return nil

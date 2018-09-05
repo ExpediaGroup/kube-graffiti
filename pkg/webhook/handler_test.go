@@ -17,7 +17,7 @@ type mockMutator struct {
 	mock.Mock
 }
 
-func (m *mockMutator) Mutate(req *admission.AdmissionRequest) *admission.AdmissionResponse {
+func (m *mockMutator) MutateAdmission(req *admission.AdmissionRequest) *admission.AdmissionResponse {
 	args := m.Called(req)
 	return args.Get(0).(*admission.AdmissionResponse)
 }
@@ -72,7 +72,7 @@ func TestCallsMutateWhenPathIsHandled(t *testing.T) {
 	// Set up a GrafittiMutator mock
 	fake := new(mockMutator)
 	// no error when returning tiller role means that there is one.
-	fake.On("Mutate", mock.AnythingOfType("*v1beta1.AdmissionRequest")).Return(&admission.AdmissionResponse{})
+	fake.On("MutateAdmission", mock.AnythingOfType("*v1beta1.AdmissionRequest")).Return(&admission.AdmissionResponse{})
 
 	rr := httptest.NewRecorder()
 	handler := newGraffitiHandler()

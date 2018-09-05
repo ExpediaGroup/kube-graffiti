@@ -1,3 +1,5 @@
+// Package graffiti decideds whether an object should be graffiti'd, according to a rule, and then produces and JSON patch with the desired modification.
+// Mutate either kubernetes admission request objects or plain raw objects.
 package graffiti
 
 import (
@@ -52,40 +54,99 @@ type Additions struct {
 	Labels      map[string]string `mapstructure:"labels"`
 }
 
-// genericObject is used only for pulling out object metadata
+// metaObject is used only for pulling out object metadata
 type metaObject struct {
 	Meta metav1.ObjectMeta `json:"metadata"`
 }
 
-// Mutate takes an admission request and applies the graffiti rule against it, returning an admission response to the kube-api.
-// It performs the logic between selectors and the boolean-operator.
+// MutateAdmission takes an admission request and generates an admission response based on the response from Mutate.
 // It implements the graffitiMutator interface and so can be added to the webhook handler's tagmap
-func (r Rule) Mutate(req *admission.AdmissionRequest) *admission.AdmissionResponse {
-	mylog := log.ComponentLogger(componentName, "Mutate")
+func (r Rule) MutateAdmission(req *admission.AdmissionRequest) *admission.AdmissionResponse {
+	mylog := log.ComponentLogger(componentName, "MutateAdmission")
 	mylog = mylog.With().Str("rule", r.Name).Str("kind", req.Kind.String()).Str("name", req.Name).Str("namespace", req.Namespace).Logger()
+
+	// make sure that name and namespace fields are populated in the metadata object
+	object := make(map[string]interface{})
+	if err := json.Unmarshal(req.Object.Raw, &object); err != nil {
+		return admissionResponseError(fmt.Errorf("failed to unmarshal object from the admission request: %v", err))
+	}
+	if req.Name != "" {
+		addMetadata(object, "name", req.Name)
+	}
+	if req.Namespace != "" {
+		addMetadata(object, "namespace", req.Namespace)
+	}
+	updatedObject, err := json.Marshal(object)
+	if err != nil {
+		return admissionResponseError(fmt.Errorf("failed to marshal object: %v", err))
+	}
+
+	patch, err := r.Mutate(updatedObject)
+	if err != nil {
+		return admissionResponseError(fmt.Errorf("failed to mutate object: %v", err))
+	}
+
+	if patch == nil {
+		return &admission.AdmissionResponse{
+			Allowed: true,
+			Result: &metav1.Status{
+				Message: "rule didn't match",
+			},
+		}
+	}
+
+	pt := admission.PatchTypeJSONPatch
+	return &admission.AdmissionResponse{
+		Allowed: true,
+		Result: &metav1.Status{
+			Message: "object painted by kube-graffiti",
+		},
+		PatchType: &pt,
+		Patch:     patch,
+	}
+}
+
+// addMetadata adds/sets a metadata item, creating new metadata map if required.
+func addMetadata(obj map[string]interface{}, k, v string) {
+	if _, ok := obj["metadata"]; ok {
+		meta := obj["metadata"].(map[string]interface{})
+		meta[k] = v
+	} else {
+		obj["metadata"] = map[string]interface{}{k: v}
+	}
+}
+
+func admissionResponseError(err error) *admission.AdmissionResponse {
+	mylog := log.ComponentLogger(componentName, "admissionResponseError")
+	mylog.Error().Err(err).Msg("admission response error, skipping any modification")
+	return &admission.AdmissionResponse{
+		Allowed: true,
+		Result: &metav1.Status{
+			Message: err.Error(),
+		},
+	}
+}
+
+// Mutate takes a raw object and applies the graffiti rule against it, returning a JSON patch or an error.
+// It performs the logic between selectors and the boolean-operator.
+func (r Rule) Mutate(object []byte) (patch []byte, err error) {
+	mylog := log.ComponentLogger(componentName, "Mutate")
+	mylog = mylog.With().Str("rule", r.Name).Str("object", string(object)).Logger()
 	var (
 		paintIt      = false
 		labelMatches = false
 		fieldMatches = false
 		metaObject   metaObject
-		err          error
 	)
 
-	if err := json.Unmarshal(req.Object.Raw, &metaObject); err != nil {
-		return admissionResponseError(fmt.Errorf("failed to unmarshal generic object metadata from the admission request: %v", err))
-	}
-	// make sure that name and namespace fields are populated in the metadata object
-	if req.Name != "" {
-		metaObject.Meta.Name = req.Name
-	}
-	if req.Namespace != "" {
-		metaObject.Meta.Namespace = req.Namespace
+	if err := json.Unmarshal(object, &metaObject); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal generic object metadata from the admission request: %v", err)
 	}
 
 	// create the field map for use with field matchers and addition templating.
-	fieldMap, err := makeFieldMapFromRequest(req)
+	fieldMap, err := makeFieldMapFromRawObject(object)
 	if err != nil {
-		return admissionResponseError(err)
+		return nil, err
 	}
 
 	if len(r.Matchers.LabelSelectors) == 0 && len(r.Matchers.FieldSelectors) == 0 {
@@ -96,14 +157,14 @@ func (r Rule) Mutate(req *admission.AdmissionRequest) *admission.AdmissionRespon
 		mylog.Debug().Int("count", len(r.Matchers.LabelSelectors)).Msg("matching against label selectors")
 		labelMatches, err = r.matchLabelSelectors(metaObject)
 		if err != nil {
-			return admissionResponseError(err)
+			return nil, err
 		}
 
 		// test if we match any field selectors
 		mylog.Debug().Int("count", len(r.Matchers.FieldSelectors)).Msg("matching against field selectors")
-		fieldMatches, err = r.matchFieldSelectors(req, fieldMap)
+		fieldMatches, err = r.matchFieldSelectors(fieldMap)
 		if err != nil {
-			return admissionResponseError(err)
+			return nil, err
 		}
 	}
 
@@ -132,12 +193,7 @@ func (r Rule) Mutate(req *admission.AdmissionRequest) *admission.AdmissionRespon
 
 	if !paintIt {
 		mylog.Info().Msg("rule didn't match")
-		return &admission.AdmissionResponse{
-			Allowed: true,
-			Result: &metav1.Status{
-				Message: "rule didn't match",
-			},
-		}
+		return nil, nil
 	}
 
 	mylog.Info().Msg("rule matched - painting object")
@@ -179,22 +235,6 @@ func (r Rule) matchLabelSelectors(object metaObject) (bool, error) {
 	return false, nil
 }
 
-func makeFieldMapFromRequest(req *admission.AdmissionRequest) (map[string]string, error) {
-	// create the field map for use with field matchers and addition templating.
-	fm, err := makeFieldMapFromRawObject(req.Object.Raw)
-	if err != nil {
-		return fm, err
-	}
-	// make sure that metadata.name and metadata.namespace are populated from req object
-	if req.Name != "" {
-		fm["metadata.name"] = req.Name
-	}
-	if req.Namespace != "" {
-		fm["metadata.namespace"] = req.Namespace
-	}
-	return fm, nil
-}
-
 // matchSelector will apply a kubernetes labels.Selector to a map[string]string and return a matched bool and error.
 func matchLabelSelector(selector string, target map[string]string) (bool, error) {
 	mylog := log.ComponentLogger(componentName, "matchLabelSelector")
@@ -223,7 +263,7 @@ func ValidateLabelSelector(selector string) error {
 	return nil
 }
 
-func (r Rule) matchFieldSelectors(req *admission.AdmissionRequest, fm map[string]string) (bool, error) {
+func (r Rule) matchFieldSelectors(fm map[string]string) (bool, error) {
 	mylog := log.ComponentLogger(componentName, "matchFieldSelectors")
 	if len(r.Matchers.FieldSelectors) != 0 {
 		for _, selector := range r.Matchers.FieldSelectors {
@@ -260,32 +300,16 @@ func matchFieldSelector(selector string, target map[string]string) (bool, error)
 	return true, nil
 }
 
-func admissionResponseError(err error) *admission.AdmissionResponse {
-	mylog := log.ComponentLogger(componentName, "admissionResponseError")
-	mylog.Error().Err(err).Msg("admission response error, skipping any modification")
-	return &admission.AdmissionResponse{
-		Allowed: true,
-		Result: &metav1.Status{
-			Message: err.Error(),
-		},
-	}
-}
-
-func (r Rule) paintObject(object metaObject, fm map[string]string, logger zerolog.Logger) *admission.AdmissionResponse {
+func (r Rule) paintObject(object metaObject, fm map[string]string, logger zerolog.Logger) (patch []byte, err error) {
 	mylog := logger.With().Str("func", "paintObject").Logger()
-	reviewResponse := admission.AdmissionResponse{}
-	reviewResponse.Allowed = true
 
 	if len(r.Additions.Labels) == 0 && len(r.Additions.Annotations) == 0 {
-		return admissionResponseError(fmt.Errorf("graffiti rule has no additional labels or annotations"))
+		return []byte{}, fmt.Errorf("graffiti rule has no additional labels or annotations")
 	}
-	patch, err := r.createObjectPatch(object, fm)
+	patchString, err := r.createObjectPatch(object, fm)
 	if err != nil {
-		return admissionResponseError(fmt.Errorf("could not create json patch: %v", err))
+		return []byte{}, fmt.Errorf("could not create json patch: %v", err)
 	}
-	mylog.Info().Str("patch", patch).Msg("created json patch")
-	reviewResponse.Patch = []byte(patch)
-	pt := admission.PatchTypeJSONPatch
-	reviewResponse.PatchType = &pt
-	return &reviewResponse
+	mylog.Info().Str("patch", patchString).Msg("created json patch")
+	return []byte(patchString), nil
 }
