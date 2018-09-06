@@ -305,11 +305,16 @@ func (r Rule) paintObject(object metaObject, fm map[string]string, logger zerolo
 	mylog := logger.With().Str("func", "paintObject").Logger()
 
 	if len(r.Additions.Labels) == 0 && len(r.Additions.Annotations) == 0 {
-		return []byte{}, fmt.Errorf("graffiti rule has no additional labels or annotations")
+		return nil, fmt.Errorf("graffiti rule has no additional labels or annotations")
 	}
+
 	patchString, err := r.createObjectPatch(object, fm)
 	if err != nil {
-		return []byte{}, fmt.Errorf("could not create json patch: %v", err)
+		return nil, fmt.Errorf("could not create json patch: %v", err)
+	}
+	if patchString == "" {
+		mylog.Info().Msg("paint resulted in no patch")
+		return nil, nil
 	}
 	mylog.Info().Str("patch", patchString).Msg("created json patch")
 	return []byte(patchString), nil

@@ -725,3 +725,24 @@ func TestLabelAndFieldSelectorsXORanEmptySelectorIsNotAMatch(t *testing.T) {
 	assert.Equal(t, true, resp.Allowed, "the request should be successful")
 	assert.Nil(t, resp.Patch)
 }
+
+func TestWhenAdditionsAlreadyThereProducesNoPatch(t *testing.T) {
+	// create a Rule
+	rule := Rule{Matchers: Matchers{
+		LabelSelectors: []string{"author = david"},
+	},
+		Additions: Additions{
+			Labels: map[string]string{"author": "david"},
+		},
+	}
+
+	// create a review request
+	var review = admission.AdmissionReview{}
+	err := json.Unmarshal([]byte(testReview), &review)
+	assert.NoError(t, err, "couldn't marshall a valid admission review object from test json")
+
+	// call Mutate
+	resp := rule.MutateAdmission(review.Request)
+	assert.Equal(t, true, resp.Allowed, "the request should be successful")
+	assert.Nil(t, resp.Patch)
+}
