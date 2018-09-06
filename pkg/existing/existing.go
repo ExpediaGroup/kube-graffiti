@@ -11,6 +11,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/rest"
@@ -214,7 +215,7 @@ func checkResourceType(rule *config.Rule, gv string, resource metav1.APIResource
 	}
 	rlog.Debug().Int("number-resources", len(list.Items)).Msg("processing batch of resources")
 	for _, item := range list.Items {
-		checkObject(rule, gv, item)
+		checkObject(rule, gv, resource.Name, item)
 	}
 
 	// if we only got a partial list we need to continue until we have seen them all
@@ -232,7 +233,7 @@ func checkResourceType(rule *config.Rule, gv string, resource metav1.APIResource
 		}
 		rlog.Debug().Int("number-resources", len(list.Items)).Msg("processing batch of resources")
 		for _, item := range list.Items {
-			checkObject(rule, gv, item)
+			checkObject(rule, gv, resource.Name, item)
 		}
 		meta = list.Object["metadata"].(map[string]interface{})
 		cont, ok = meta["continue"]
@@ -240,11 +241,12 @@ func checkResourceType(rule *config.Rule, gv string, resource metav1.APIResource
 }
 
 // checkObject takes a single kubernete object and decides whether to graffiti it or not.
-func checkObject(rule *config.Rule, gv string, object unstructured.Unstructured) {
+func checkObject(rule *config.Rule, gv, resource string, object unstructured.Unstructured) {
 	mylog := log.ComponentLogger(componentName, "checkObject")
 	kind := object.GetKind()
 	name := object.GetName()
-	rlog := mylog.With().Str("rule", rule.Registration.Name).Str("group-version", gv).Str("kind", kind).Str("name", name).Logger()
+	namespace := object.GetNamespace()
+	rlog := mylog.With().Str("rule", rule.Registration.Name).Str("group-version", gv).Str("kind", kind).Str("name", name).Str("namespace", namespace).Logger()
 	rlog.Info().Msg("checking object")
 
 	// match against optional rule namespace selector
@@ -276,9 +278,33 @@ func checkObject(rule *config.Rule, gv string, object unstructured.Unstructured)
 		rlog.Error().Err(err).Msg("could not mutate object")
 		return
 	}
-	if patch != nil {
-		rlog.Info().Str("patch", string(patch)).Msg("mutate produced a patch")
+	if patch == nil {
+		rlog.Info().Msg("mutate did not create a patch")
+		return
 	}
+
+	rlog.Debug().Str("patch", string(patch)).Msg("mutate produced a patch")
+	g, v := splitGroupVersionString(gv)
+	grv := schema.GroupVersionResource{
+		Group:    g,
+		Version:  v,
+		Resource: resource,
+	}
+	spew.Dump(grv)
+	ri := dynamicClient.Resource(grv)
+	if namespace == "" {
+		rlog.Debug().Msg("patching cluster level object")
+		_, err = ri.Patch(name, types.JSONPatchType, patch)
+	} else {
+		rlog.Debug().Msg("patching namespaced object")
+		nri := ri.Namespace(namespace)
+		_, err = nri.Patch(name, types.JSONPatchType, patch)
+	}
+	if err != nil {
+		rlog.Error().Err(err).Msg("failed to patch object")
+		return
+	}
+	rlog.Info().Str("patch", string(patch)).Msg("successfully patched object")
 }
 
 // matchNamespaceSelector decides whether the object/object's namespace matches the namespace selector provided.
