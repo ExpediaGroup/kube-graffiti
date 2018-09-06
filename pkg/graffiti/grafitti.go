@@ -131,7 +131,7 @@ func admissionResponseError(err error) *admission.AdmissionResponse {
 // It performs the logic between selectors and the boolean-operator.
 func (r Rule) Mutate(object []byte) (patch []byte, err error) {
 	mylog := log.ComponentLogger(componentName, "Mutate")
-	mylog = mylog.With().Str("rule", r.Name).Str("object", string(object)).Logger()
+	mylog = mylog.With().Str("rule", r.Name).Logger()
 	var (
 		paintIt      = false
 		labelMatches = false
