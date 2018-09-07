@@ -50,6 +50,9 @@ func InitKubeClients(rest *rest.Config) error {
 	if err != nil {
 		return fmt.Errorf("can't get a kubernetes dynamic client: %v", err)
 	}
+	if err := initNamespaceCache(rest); err != nil {
+		return fmt.Errorf("could not create the namespace cache: %v", err)
+	}
 
 	return discoverAPIsAndResources()
 }
@@ -82,16 +85,21 @@ func discoverAPIsAndResources() error {
 	return nil
 }
 
-// CheckExistingObjects interates over the graffiti rules and targets, checking each one.
-func CheckExistingObjects(rules []config.Rule) {
-	mylog := log.ComponentLogger(componentName, "CheckExistingObjects")
+// CheckRulesAgainstExistingState interates over the graffiti rules and targets, checking each one.
+func CheckRulesAgainstExistingState(rules []config.Rule) {
+	mylog := log.ComponentLogger(componentName, "CheckRulesAgainstExistingState")
 
+	// start the namespace cache reflector to populate it with values
+	stop := make(chan struct{})
+	defer close(stop)
+	startNamespaceReflector(stop)
 	mylog.Info().Msg("checking existing objects against graffiti rules")
 	for _, rule := range rules {
 		for _, target := range rule.Registration.Targets {
 			checkTarget(&rule, target)
 		}
 	}
+	removeNamespaceCache()
 }
 
 // checkTarget starts evaluating a target by getting a list of APIGroups which are listed.
@@ -290,7 +298,6 @@ func checkObject(rule *config.Rule, gv, resource string, object unstructured.Uns
 		Version:  v,
 		Resource: resource,
 	}
-	spew.Dump(grv)
 	ri := dynamicClient.Resource(grv)
 	if namespace == "" {
 		rlog.Debug().Msg("patching cluster level object")
@@ -331,34 +338,24 @@ func matchNamespaceSelector(obj map[string]interface{}, selector string) (bool, 
 	}
 
 	if kind == "Namespace" {
+		// match against our labels...
 		mlog.Debug().Msg("object is a namespace using obj metadata labels")
-		labels = labelsFromMeta(meta)
+		labels = labelsFromRawObject(meta)
 	} else {
 		mlog.Debug().Str("namespace", name).Msg("object is not a namespace, looking up namespace labels")
-		grv := schema.GroupVersionResource{
-			Group:    "",
-			Version:  "v1",
-			Resource: "namespaces",
-		}
-		ri := dynamicClient.Resource(grv)
-		ns, err := ri.Get(name, metav1.GetOptions{})
+		// lookup namespace from the cache
+		ns, err := lookupNamespace(name)
 		if err != nil {
-			mlog.Error().Str("namespace", name).Err(err).Msg("error looking up namespace")
-			return false, fmt.Errorf("could not look up namespace %s in kubernetes: %v", name, err)
+			return false, err
 		}
-		nsMeta, ok := ns.Object["metadata"].(map[string]interface{})
-		if !ok {
-			mlog.Error().Str("namespace", name).Err(err).Msg("could not get namespace metadata")
-			return false, fmt.Errorf("could not get namespace metadata")
-		}
-		labels = labelsFromMeta(nsMeta)
+		labels = ns.Labels
 	}
 
 	return graffiti.MatchLabelSelector(selector, labels)
 }
 
-func labelsFromMeta(meta map[string]interface{}) map[string]string {
-	mylog := log.ComponentLogger(componentName, "labelsFromMeta")
+func labelsFromRawObject(meta map[string]interface{}) map[string]string {
+	mylog := log.ComponentLogger(componentName, "labelsFromRawObject")
 	labels := make(map[string]string)
 
 	l, ok := meta["labels"].(map[string]interface{})
