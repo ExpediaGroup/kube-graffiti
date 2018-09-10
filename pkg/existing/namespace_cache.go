@@ -21,73 +21,83 @@ const (
 	refreshPeriodSeconds = 60
 )
 
-var (
+type namespaceCache struct {
 	store     cache.Indexer
 	reflector *cache.Reflector
-)
+	getter    namespaceGetter
+}
 
-// Implement a cache.ListerWatcher for namespace objects.  We need to implement this interface
-// in order to create an indexer(store) and reflector.
-type namespaceListerWatcher struct {
+// namespaceListerWatcherGetter implements the cache.ListerWatcher interface.
+// This is used to create a cache that is able to list and cache namespaces.
+// It also implements the namespaceGetter interface
+type namespaceListerWatcherGetter struct {
 	ns clientcorev1.NamespaceInterface
 }
 
-func (lw namespaceListerWatcher) List(options metav1.ListOptions) (runtime.Object, error) {
-	return lw.ns.List(metav1.ListOptions{})
+func (lwg namespaceListerWatcherGetter) List(options metav1.ListOptions) (runtime.Object, error) {
+	return lwg.ns.List(metav1.ListOptions{})
 }
 
-func (lw namespaceListerWatcher) Watch(options metav1.ListOptions) (watch.Interface, error) {
-	return lw.ns.Watch(metav1.ListOptions{})
+func (lwg namespaceListerWatcherGetter) Watch(options metav1.ListOptions) (watch.Interface, error) {
+	return lwg.ns.Watch(metav1.ListOptions{})
 }
 
-func newNamespaceListerWatcher(rest *rest.Config) (namespaceListerWatcher, error) {
+func (lwg namespaceListerWatcherGetter) Get(name string, options metav1.GetOptions) (*corev1.Namespace, error) {
+	return lwg.ns.Get(name, options)
+}
+
+func newNamespaceListerWatcherGetter(rest *rest.Config) (namespaceListerWatcherGetter, error) {
 	coreClient, err := clientcorev1.NewForConfig(rest)
 	if err != nil {
-		return namespaceListerWatcher{}, err
+		return namespaceListerWatcherGetter{}, err
 	}
-	return namespaceListerWatcher{ns: coreClient.Namespaces()}, nil
+	return namespaceListerWatcherGetter{ns: coreClient.Namespaces()}, nil
 }
 
-// initNamespaceLookupCache starts a client-go cache and reflector which watches and updates namespaces when they change.
-// We pass a stop channel to signal the reflector to shutdown when we no longer need it.
-func initNamespaceCache(rest *rest.Config) error {
-	mylog := log.ComponentLogger(componentName, "cachingLookupNamespace")
+// namespaceGetter allows us to abstract the operation of getting namespaces
+type namespaceGetter interface {
+	Get(name string, options metav1.GetOptions) (*corev1.Namespace, error)
+}
+
+// NewNamespaceCache creates client-go cache.Store and Reflector which watches and updates namespaces when they change.
+func NewNamespaceCache(rest *rest.Config) (namespaceCache, error) {
+	mylog := log.ComponentLogger(componentName, "NewNamespaceCache")
 	mylog.Info().Msg("starting the namespace cache")
 
-	lw, err := newNamespaceListerWatcher(rest)
+	lwg, err := newNamespaceListerWatcherGetter(rest)
 	if err != nil {
 		mylog.Error().Err(err).Msg("failed to create the namespace lister-watcher")
-		return fmt.Errorf("could not create namespace listerwatcher: %v", err)
+		return namespaceCache{}, fmt.Errorf("could not create namespace listerwatcher: %v", err)
 	}
 	var ns *corev1.Namespace
-	store, reflector = cache.NewNamespaceKeyedIndexerAndReflector(lw, ns, time.Duration(refreshPeriodSeconds*time.Second))
-	mylog.Debug().Msg("starting the namespace cache reflector")
+	store, reflector := cache.NewNamespaceKeyedIndexerAndReflector(lwg, ns, time.Duration(refreshPeriodSeconds*time.Second))
 
-	return nil
+	return namespaceCache{
+		store:     store,
+		reflector: reflector,
+		getter:    lwg,
+	}, nil
 }
 
-func startNamespaceReflector(stop <-chan struct{}) {
-	go reflector.Run(stop)
+// StartNamespaceReflector is seperate from the store which we are creating earlier with the rest.Config - we want to
+// pass the reflector a stop channel, which needs to be created and closed within the CheckRulesAgainstExistingState function.
+func (c namespaceCache) StartNamespaceReflector(stop <-chan struct{}) {
+	go c.reflector.Run(stop)
 }
 
-func lookupNamespace(name string) (*corev1.Namespace, error) {
+func (c namespaceCache) LookupNamespace(name string) (*corev1.Namespace, error) {
 	mylog := log.ComponentLogger(componentName, "cachingLookupNamespace").With().Str("namespace", name).Logger()
 	mylog.Debug().Msg("looking up namespace")
 
-	ns, exists, err := store.GetByKey(name)
+	ns, exists, err := c.store.GetByKey(name)
 	if err != nil {
 		mylog.Error().Err(err).Msg("error looking up namespace in cache")
 		return &corev1.Namespace{}, fmt.Errorf("error looking up namespace from store: %v", err)
 	}
 	if !exists {
-		mylog.Error().Msg("namespace does not exist")
-		return &corev1.Namespace{}, fmt.Errorf("namespace %s does not exist", name)
+		mylog.Warn().Msg("namespace not found in cache, falling back to api call")
+		return c.getter.Get(name, metav1.GetOptions{})
 	}
 
 	return ns.(*corev1.Namespace), nil
-}
-
-func removeNamespaceCache() {
-	store = nil
-	reflector = nil
 }

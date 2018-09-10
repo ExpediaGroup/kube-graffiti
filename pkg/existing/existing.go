@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/davecgh/go-spew/spew"
+	yaml "gopkg.in/yaml.v2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -29,11 +29,17 @@ const (
 
 var (
 	// package level discovery client to share when looking up available kubernetes objects/versions/resources
-	discoveryClient     *discovery.DiscoveryClient
+	discoveryClient     aDiscoveryClienter
 	discoveredAPIGroups = make(map[string]metav1.APIGroup)
 	discoveredResources = make(map[string][]metav1.APIResource)
 	dynamicClient       dynamic.Interface
+	nsCache             namespaceCache
 )
+
+type aDiscoveryClienter interface {
+	ServerGroups() (apiGroupList *metav1.APIGroupList, err error)
+	ServerResources() ([]*metav1.APIResourceList, error)
+}
 
 // InitKubeClients sets up the package for working with kubernetes api and discovers
 // and caches known api groups/versions and resource types
@@ -50,7 +56,8 @@ func InitKubeClients(rest *rest.Config) error {
 	if err != nil {
 		return fmt.Errorf("can't get a kubernetes dynamic client: %v", err)
 	}
-	if err := initNamespaceCache(rest); err != nil {
+	nsCache, err = NewNamespaceCache(rest)
+	if err != nil {
 		return fmt.Errorf("could not create the namespace cache: %v", err)
 	}
 
@@ -78,6 +85,8 @@ func discoverAPIsAndResources() error {
 		mylog.Error().Err(err).Msg("failed to look up kubernetes resources")
 		return fmt.Errorf("failed to discover kubernetes api resources: %v", err)
 	}
+	djson, _ := yaml.Marshal(sliceOfResourceLists)
+	fmt.Println(string(djson))
 	for _, gv := range sliceOfResourceLists {
 		discoveredResources[gv.GroupVersion] = gv.APIResources
 	}
@@ -92,14 +101,13 @@ func CheckRulesAgainstExistingState(rules []config.Rule) {
 	// start the namespace cache reflector to populate it with values
 	stop := make(chan struct{})
 	defer close(stop)
-	startNamespaceReflector(stop)
+	nsCache.StartNamespaceReflector(stop)
 	mylog.Info().Msg("checking existing objects against graffiti rules")
 	for _, rule := range rules {
 		for _, target := range rule.Registration.Targets {
 			checkTarget(&rule, target)
 		}
 	}
-	removeNamespaceCache()
 }
 
 // checkTarget starts evaluating a target by getting a list of APIGroups which are listed.
@@ -229,7 +237,6 @@ func checkResourceType(rule *config.Rule, gv string, resource metav1.APIResource
 	// if we only got a partial list we need to continue until we have seen them all
 	meta := list.Object["metadata"].(map[string]interface{})
 	for cont, ok := meta["continue"]; ok; {
-		spew.Dump(cont)
 		list, err = ri.List(metav1.ListOptions{Limit: itemLimit, Continue: cont.(string)})
 		if err != nil {
 			rlog.Error().Err(err).Msg("failed to list resources")
@@ -344,7 +351,7 @@ func matchNamespaceSelector(obj map[string]interface{}, selector string) (bool, 
 	} else {
 		mlog.Debug().Str("namespace", name).Msg("object is not a namespace, looking up namespace labels")
 		// lookup namespace from the cache
-		ns, err := lookupNamespace(name)
+		ns, err := nsCache.LookupNamespace(name)
 		if err != nil {
 			return false, err
 		}

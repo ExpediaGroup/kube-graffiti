@@ -229,15 +229,15 @@
   version = "v1.8.0"
 
 [[projects]]
-  digest = "1:7ba2551c9a8de293bc575dbe2c0d862c52252d26f267f784547f059f512471c8"
+  digest = "1:d0431c2fd72e39ee43ea7742322abbc200c3e704c9102c5c3c2e2e667095b0ca"
   name = "github.com/spf13/afero"
   packages = [
     ".",
     "mem",
   ]
   pruneopts = ""
-  revision = "787d034dfe70e44075ccc060d346146ef53270ad"
-  version = "v1.1.1"
+  revision = "d40851caa0d747393da1ffb28f7f9d8b4eeffebd"
+  version = "v1.1.2"
 
 [[projects]]
   digest = "1:d0b38ba6da419a6d4380700218eeec8623841d44a856bb57369c172fbf692ab4"
@@ -256,12 +256,12 @@
   version = "v0.0.3"
 
 [[projects]]
-  branch = "master"
-  digest = "1:49d1a9ccb9502d5ce81e7ae622211c496612970bbbfd1c9e4065e6ec13c3d030"
+  digest = "1:9ceffa4ab5f7195ecf18b3a7fff90c837a9ed5e22e66d18069e4bccfe1f52aa0"
   name = "github.com/spf13/jwalterweatherman"
   packages = ["."]
   pruneopts = ""
-  revision = "14d3d4c518341bea657dd8a226f5121c0ff8c9f2"
+  revision = "4a4406e478ca629068e7768fc33f3f044173c0a6"
+  version = "v1.0.0"
 
 [[projects]]
   digest = "1:0a52bcb568386d98f4894575d53ce3e456f56471de6897bb8b9de13c33d9340e"
@@ -272,12 +272,12 @@
   version = "v1.0.2"
 
 [[projects]]
-  digest = "1:a3018c5a423d6cfacf5c6e736ad07637494728fb446390e3f34cacae9e80a529"
+  digest = "1:ac25ea6cc1156aca9611411274b4a0bdd83a623845df6985aab508253955cc66"
   name = "github.com/spf13/viper"
   packages = ["."]
   pruneopts = ""
-  revision = "907c19d40d9a6c9bb55f040ff4ae45271a4754b9"
-  version = "v1.1.0"
+  revision = "8fb642006536c8d3760c99d4fa2389f5e2205631"
+  version = "v1.2.0"
 
 [[projects]]
   digest = "1:711eebe744c0151a9d09af2315f0bb729b2ec7637ef4c410fa90a18ef74b65b6"
@@ -317,7 +317,7 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:7dd0f1b8c8bd70dbae4d3ed3fbfaec224e2b27bcc0fc65882d6f1dba5b1f6e22"
+  digest = "1:782723d6fc27d202f1943219d68d58b3f6bcab6212c85294b1ddd8b586b1d356"
   name = "golang.org/x/net"
   packages = [
     "context",
@@ -327,18 +327,18 @@
     "idna",
   ]
   pruneopts = ""
-  revision = "8a410e7b638dca158bf9e766925842f6651ff828"
+  revision = "161cd47e91fd58ac17490ef4d742dc98bb4cf60e"
 
 [[projects]]
   branch = "master"
-  digest = "1:6aa9d6311161f9ba8e84ec8d7d13ac5a7ee73c246cb6f7a62b7ffb7b695da280"
+  digest = "1:ed900376500543ca05f2a2383e1f541b4606f19cd22f34acb81b17a0b90c7f3e"
   name = "golang.org/x/sys"
   packages = [
     "unix",
     "windows",
   ]
   pruneopts = ""
-  revision = "8cf3aee429924738c56c34bb819c4ea8273fc434"
+  revision = "d0be0721c37eeb5299f245a996a483160fc36940"
 
 [[projects]]
   digest = "1:5acd3512b047305d49e8763eef7ba423901e85d5dd2fd1e71778a0ea8de10bd4"
@@ -542,7 +542,6 @@
   analyzer-version = 1
   input-imports = [
     "github.com/cameront/go-jsonpatch",
-    "github.com/davecgh/go-spew/spew",
     "github.com/mitchellh/mapstructure",
     "github.com/rs/zerolog",
     "github.com/rs/zerolog/log",
@@ -551,6 +550,7 @@
     "github.com/stretchr/testify/assert",
     "github.com/stretchr/testify/mock",
     "github.com/stretchr/testify/require",
+    "gopkg.in/yaml.v2",
     "k8s.io/api/admission/v1beta1",
     "k8s.io/api/admissionregistration/v1beta1",
     "k8s.io/api/core/v1",
@@ -564,9 +564,11 @@
     "k8s.io/apimachinery/pkg/types",
     "k8s.io/apimachinery/pkg/util/validation",
     "k8s.io/apimachinery/pkg/util/validation/field",
+    "k8s.io/apimachinery/pkg/watch",
     "k8s.io/client-go/discovery",
     "k8s.io/client-go/dynamic",
     "k8s.io/client-go/kubernetes",
+    "k8s.io/client-go/kubernetes/typed/core/v1",
     "k8s.io/client-go/rest",
     "k8s.io/client-go/tools/cache",
   ]
