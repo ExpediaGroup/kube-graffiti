@@ -1,11 +1,9 @@
 package existing
 
 import (
-	"encoding/json"
 	"errors"
 	"testing"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -238,54 +236,4 @@ func TestServerAPIResourcesLookupFailureReturnsAnError(t *testing.T) {
 
 	err := discoverAPIsAndResources()
 	require.Error(t, err, "we should return an error when server api groups fail")
-}
-
-func TestGettingLabelsFromAYamlMapInterfaceInterface(t *testing.T) {
-	var obj map[interface{}]interface{}
-	err := yaml.Unmarshal([]byte(testNamespace), &obj)
-	spew.Dump(obj)
-	require.NoError(t, err)
-
-	labels := lookupLabels(obj["metadata"])
-	assert.Equal(t, 2, len(labels), "there are two labels in the test namespace")
-	col, ok := labels["colour"]
-	assert.Equal(t, true, ok, "the label colour should be found")
-	assert.Equal(t, "green", col, "the value of label colour should be green")
-}
-
-func TestGettingLabelsFromAJSONMapStringInterface(t *testing.T) {
-	var jsonNamespace = `{
-		"apiVersion": "v1",
-		"kind": "Namespace",
-		"metadata": {
-			"creationTimestamp": "2018-09-10T09:34:31Z",
-			"labels": {
-				"fruit": "apple",
-				"colour": "green"
-			},
-			"name": "test-namespace",
-			"resourceVersion": "561",
-			"selfLink": "/api/v1/namespaces/test-namespace",
-			"uid": "b8337c4c-b4dc-11e8-990c-08002722bfc3"
-		},
-		"spec": {
-			"finalizers": [
-				"kubernetes"
-			]
-		},
-		"status": {
-			"phase": "Active"
-		}
-	}`
-
-	var ns map[string]interface{}
-	err := json.Unmarshal([]byte(jsonNamespace), &ns)
-	spew.Dump(ns)
-	require.NoError(t, err)
-
-	labels := lookupLabels(ns["metadata"])
-	assert.Equal(t, 2, len(labels), "there are two labels in the test namespace")
-	col, ok := labels["colour"]
-	assert.Equal(t, true, ok, "the label colour should be found")
-	assert.Equal(t, "green", col, "the value of label colour should be green")
 }

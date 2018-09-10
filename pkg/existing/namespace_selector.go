@@ -4,7 +4,6 @@ import (
 	"errors"
 	"reflect"
 
-	"github.com/davecgh/go-spew/spew"
 	"stash.hcom/run/kube-graffiti/pkg/graffiti"
 	"stash.hcom/run/kube-graffiti/pkg/log"
 )
@@ -13,7 +12,7 @@ import (
 // If the object is a namespace then it uses its own labels, otherwise the namespace is looked up and used.
 // Cluster scoped objects can not match a namespace selector.
 // Namespaces without labels can match a namespace selector with a negative match expression.
-func matchNamespaceSelector(obj map[string]interface{}, selector string) (bool, error) {
+func matchNamespaceSelector(obj map[string]interface{}, selector string, nsc namespaceCache) (bool, error) {
 	mylog := log.ComponentLogger(componentName, "matchNamespaceSelector")
 	mlog := mylog.With().Str("selector", selector).Logger()
 	var labels map[string]string
@@ -24,8 +23,11 @@ func matchNamespaceSelector(obj map[string]interface{}, selector string) (bool, 
 		return false, errors.New("the object is missing metadata")
 	}
 
-	name := meta["namespace"].(string)
-	kind := obj["kind"].(string)
+	name, _ := meta["namespace"].(string)
+	kind, ok := obj["kind"].(string)
+	if !ok {
+		return false, errors.New("this object seems to have no kind")
+	}
 	if len(name) == 0 && kind != "Namespace" {
 		// Cluster scoped resources (except namespaces) can not match a namespace selector!
 		mlog.Debug().Msg("a cluster scoped object can not match any namespace selector")
@@ -39,13 +41,15 @@ func matchNamespaceSelector(obj map[string]interface{}, selector string) (bool, 
 	} else {
 		mlog.Debug().Str("namespace", name).Msg("object is not a namespace, looking up namespace labels")
 		// lookup namespace from the cache
-		ns, err := nsCache.LookupNamespace(name)
+		ns, err := nsc.LookupNamespace(name)
 		if err != nil {
 			return false, err
 		}
 		labels = ns.Labels
 	}
-
+	if err := graffiti.ValidateLabelSelector(selector); err != nil {
+		return false, errors.New("invalid label selector")
+	}
 	return graffiti.MatchLabelSelector(selector, labels)
 }
 
@@ -59,7 +63,6 @@ func lookupLabels(obj interface{}) map[string]string {
 	if reflect.ValueOf(obj).Kind() == reflect.Map {
 		mylog.Debug().Msg("object is a map")
 		keys := reflect.ValueOf(obj).MapKeys()
-		spew.Dump(keys)
 		for _, k := range keys {
 			ks, _ := getStringValue(k)
 			mylog.Debug().Str("key", ks).Msg("checking if key is labels")
@@ -83,8 +86,10 @@ func convertToMapStringString(obj reflect.Value) map[string]string {
 
 	switch obj.Kind() {
 	case reflect.Interface:
+		mylog.Debug().Msg("object is an interface")
 		return convertToMapStringString(reflect.ValueOf(obj.Interface()))
 	case reflect.Map:
+		mylog.Debug().Msg("object is a map")
 		keys := obj.MapKeys()
 		for _, k := range keys {
 			if ks, ok := getStringValue(k); ok {

@@ -262,7 +262,7 @@ func checkObject(rule *config.Rule, gv, resource string, object unstructured.Uns
 
 	// match against optional rule namespace selector
 	if rule.Registration.NamespaceSelector != "" {
-		match, err := matchNamespaceSelector(object.Object, rule.Registration.NamespaceSelector)
+		match, err := matchNamespaceSelector(object.Object, rule.Registration.NamespaceSelector, nsCache)
 		if err != nil {
 			rlog.Error().Err(err).Msg("error checking object against namespace selector")
 		}
