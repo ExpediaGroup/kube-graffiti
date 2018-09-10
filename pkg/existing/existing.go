@@ -3,11 +3,9 @@ package existing
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"strings"
 
-	yaml "gopkg.in/yaml.v2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -29,14 +27,14 @@ const (
 
 var (
 	// package level discovery client to share when looking up available kubernetes objects/versions/resources
-	discoveryClient     aDiscoveryClienter
+	discoveryClient     apiDiscoverer
 	discoveredAPIGroups = make(map[string]metav1.APIGroup)
 	discoveredResources = make(map[string][]metav1.APIResource)
 	dynamicClient       dynamic.Interface
 	nsCache             namespaceCache
 )
 
-type aDiscoveryClienter interface {
+type apiDiscoverer interface {
 	ServerGroups() (apiGroupList *metav1.APIGroupList, err error)
 	ServerResources() ([]*metav1.APIResourceList, error)
 }
@@ -85,8 +83,6 @@ func discoverAPIsAndResources() error {
 		mylog.Error().Err(err).Msg("failed to look up kubernetes resources")
 		return fmt.Errorf("failed to discover kubernetes api resources: %v", err)
 	}
-	djson, _ := yaml.Marshal(sliceOfResourceLists)
-	fmt.Println(string(djson))
 	for _, gv := range sliceOfResourceLists {
 		discoveredResources[gv.GroupVersion] = gv.APIResources
 	}
@@ -319,62 +315,4 @@ func checkObject(rule *config.Rule, gv, resource string, object unstructured.Uns
 		return
 	}
 	rlog.Info().Str("patch", string(patch)).Msg("successfully patched object")
-}
-
-// matchNamespaceSelector decides whether the object/object's namespace matches the namespace selector provided.
-// If the object is a namespace then it uses its own labels, otherwise the namespace is looked up and used.
-// Cluster scoped objects can not match a namespace selector.
-// Namespaces without labels can match a namespace selector with a negative match expression.
-func matchNamespaceSelector(obj map[string]interface{}, selector string) (bool, error) {
-	mylog := log.ComponentLogger(componentName, "matchNamespaceSelector")
-	mlog := mylog.With().Str("selector", selector).Logger()
-	var labels map[string]string
-
-	meta, ok := obj["metadata"].(map[string]interface{})
-	if !ok {
-		mlog.Error().Msg("object has no metadata")
-		return false, errors.New("the object is missing metadata")
-	}
-
-	name := meta["namespace"].(string)
-	kind := obj["kind"].(string)
-	if len(name) == 0 && kind != "Namespace" {
-		// Cluster scoped resources (except namespaces) can not match a namespace selector!
-		mlog.Debug().Msg("a cluster scoped object can not match any namespace selector")
-		return false, nil
-	}
-
-	if kind == "Namespace" {
-		// match against our labels...
-		mlog.Debug().Msg("object is a namespace using obj metadata labels")
-		labels = labelsFromRawObject(meta)
-	} else {
-		mlog.Debug().Str("namespace", name).Msg("object is not a namespace, looking up namespace labels")
-		// lookup namespace from the cache
-		ns, err := nsCache.LookupNamespace(name)
-		if err != nil {
-			return false, err
-		}
-		labels = ns.Labels
-	}
-
-	return graffiti.MatchLabelSelector(selector, labels)
-}
-
-func labelsFromRawObject(meta map[string]interface{}) map[string]string {
-	mylog := log.ComponentLogger(componentName, "labelsFromRawObject")
-	labels := make(map[string]string)
-
-	l, ok := meta["labels"].(map[string]interface{})
-	if !ok {
-		mylog.Debug().Msg("metadata has no labels or can't be mapped")
-		return labels
-	}
-	for k, v := range l {
-		labels[k], ok = v.(string)
-		if !ok {
-			mylog.Error().Msg("can not assert label value is a string")
-		}
-	}
-	return labels
 }

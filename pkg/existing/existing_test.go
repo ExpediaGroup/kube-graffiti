@@ -1,17 +1,16 @@
 package existing
 
 import (
-	// "github.com/stretchr/testify/assert"
-	// "github.com/stretchr/testify/require"
-	// corev1 "k8s.io/api/core/v1"
+	"encoding/json"
+	"errors"
 	"testing"
 
+	"github.com/davecgh/go-spew/spew"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
+	yaml "gopkg.in/yaml.v2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	// "k8s.io/apimachinery/pkg/runtime"
-	// "k8s.io/apimachinery/pkg/watch"
-	// "k8s.io/client-go/tools/cache"
-	// "github.com/davecgh/go-spew/spew"
 )
 
 type mockDiscoveryClient struct {
@@ -28,9 +27,14 @@ func (dc *mockDiscoveryClient) ServerResources() ([]*metav1.APIResourceList, err
 	return args.Get(0).([]*metav1.APIResourceList), args.Error(1)
 }
 
+// metaObject is used only for pulling out object metadata
+type metaObject struct {
+	Meta metav1.ObjectMeta `json:"metadata"`
+}
+
 var (
-	// cut-down api list that only contains core and apps
-	apiList = `typemeta:
+	// limit the api list to only core "" and apps
+	testAPIList = `typemeta:
 kind: APIGroupList
 apiversion: v1
 groups:
@@ -61,9 +65,227 @@ groups:
     version: v1
   serveraddressbyclientcidrs: []
 `
-	resourceList = ``
+	// limit resources to just core/namespaces and apps/deployments
+	testResourceList = `- typemeta:
+    kind: APIResourceList
+    apiversion: ""
+  groupversion: v1
+  apiresources:
+  - name: namespaces
+    singularname: ""
+    namespaced: false
+    group: ""
+    version: ""
+    kind: Namespace
+    verbs:
+    - create
+    - delete
+    - get
+    - list
+    - patch
+    - update
+    - watch
+    shortnames:
+    - ns
+    categories: []
+  - name: namespaces/finalize
+    singularname: ""
+    namespaced: false
+    group: ""
+    version: ""
+    kind: Namespace
+    verbs:
+    - update
+    shortnames: []
+    categories: []
+  - name: namespaces/status
+    singularname: ""
+    namespaced: false
+    group: ""
+    version: ""
+    kind: Namespace
+    verbs:
+    - get
+    - patch
+    - update
+    shortnames: []
+    categories: []
+- typemeta:
+    kind: APIResourceList
+    apiversion: v1
+  groupversion: apps/v1
+  apiresources:
+  - name: deployments
+    singularname: ""
+    namespaced: true
+    group: ""
+    version: ""
+    kind: Deployment
+    verbs:
+    - create
+    - delete
+    - deletecollection
+    - get
+    - list
+    - patch
+    - update
+    - watch
+    shortnames:
+    - deploy
+    categories:
+    - all
+  - name: deployments/scale
+    singularname: ""
+    namespaced: true
+    group: autoscaling
+    version: v1
+    kind: Scale
+    verbs:
+    - get
+    - patch
+    - update
+    shortnames: []
+    categories: []
+  - name: deployments/status
+    singularname: ""
+    namespaced: true
+    group: ""
+    version: ""
+    kind: Deployment
+    verbs:
+    - get
+    - patch
+    - update
+    shortnames: []
+    categories: []
+`
+
+	testNamespace = `apiVersion: v1
+kind: Namespace
+metadata:
+  creationTimestamp: 2018-09-10T09:34:31Z
+  name: test-namespace
+  labels:
+    fruit: apple
+    colour: green
+  resourceVersion: "561"
+  selfLink: /api/v1/namespaces/test-namespace
+  uid: b8337c4c-b4dc-11e8-990c-08002722bfc3
+spec:
+  finalizers:
+  - kubernetes
+status:
+  phase: Active`
 )
 
 func TestCachingDiscoveredAPISandResources(t *testing.T) {
-	return
+	// set up some mock return values
+	var sg metav1.APIGroupList
+	err := yaml.Unmarshal([]byte(testAPIList), &sg)
+	require.NoError(t, err)
+
+	var sr []metav1.APIResourceList
+	err = yaml.Unmarshal([]byte(testResourceList), &sr)
+	require.NoError(t, err)
+	// ugly need to covert our list of resources into a list of pointers to
+	// those same resources
+	var srp []*metav1.APIResourceList
+	for i := range sr {
+		srp = append(srp, &sr[i])
+	}
+
+	// set up the mock discovery client
+	dc := &mockDiscoveryClient{}
+	discoveryClient = dc
+	dc.On("ServerGroups").Return(&sg, nil)
+	dc.On("ServerResources").Return(srp, nil)
+
+	// call the discovery method
+	err = discoverAPIsAndResources()
+	require.NoError(t, err)
+
+	// now some tests that the data we think should be loaded is actually loaded
+	assert.Equal(t, 2, len(discoveredAPIGroups), "there are two test api groups in our test data")
+	assert.Equal(t, 2, len(discoveredResources), "there are two api resource lists in our test data")
+	assert.Equal(t, 3, len(discoveredResources["v1"]), "the test core v1 api has three resource types")
+	assert.Equal(t, 3, len(discoveredResources["apps/v1"]), "the test apps/v1 api has three resource types")
+}
+
+func TestServerAPIGroupLookupFailureReturnsAnError(t *testing.T) {
+	// set up some mock return values
+	var sg metav1.APIGroupList
+	err := yaml.Unmarshal([]byte(testAPIList), &sg)
+	require.NoError(t, err)
+
+	// empty server resource list resturn value...
+	var srl []*metav1.APIResourceList
+
+	dc := &mockDiscoveryClient{}
+	discoveryClient = dc
+	dc.On("ServerGroups").Return(&sg, nil)
+	dc.On("ServerResources").Return(srl, errors.New("something went wrong"))
+
+	err = discoverAPIsAndResources()
+	require.Error(t, err, "we should return an error when server api groups fail")
+}
+
+func TestServerAPIResourcesLookupFailureReturnsAnError(t *testing.T) {
+	// set up the mock discovery client
+	var sg metav1.APIGroupList
+	dc := &mockDiscoveryClient{}
+	discoveryClient = dc
+	dc.On("ServerGroups").Return(&sg, errors.New("something went wrong"))
+
+	err := discoverAPIsAndResources()
+	require.Error(t, err, "we should return an error when server api groups fail")
+}
+
+func TestGettingLabelsFromAYamlMapInterfaceInterface(t *testing.T) {
+	var obj map[interface{}]interface{}
+	err := yaml.Unmarshal([]byte(testNamespace), &obj)
+	spew.Dump(obj)
+	require.NoError(t, err)
+
+	labels := lookupLabels(obj["metadata"])
+	assert.Equal(t, 2, len(labels), "there are two labels in the test namespace")
+	col, ok := labels["colour"]
+	assert.Equal(t, true, ok, "the label colour should be found")
+	assert.Equal(t, "green", col, "the value of label colour should be green")
+}
+
+func TestGettingLabelsFromAJSONMapStringInterface(t *testing.T) {
+	var jsonNamespace = `{
+		"apiVersion": "v1",
+		"kind": "Namespace",
+		"metadata": {
+			"creationTimestamp": "2018-09-10T09:34:31Z",
+			"labels": {
+				"fruit": "apple",
+				"colour": "green"
+			},
+			"name": "test-namespace",
+			"resourceVersion": "561",
+			"selfLink": "/api/v1/namespaces/test-namespace",
+			"uid": "b8337c4c-b4dc-11e8-990c-08002722bfc3"
+		},
+		"spec": {
+			"finalizers": [
+				"kubernetes"
+			]
+		},
+		"status": {
+			"phase": "Active"
+		}
+	}`
+
+	var ns map[string]interface{}
+	err := json.Unmarshal([]byte(jsonNamespace), &ns)
+	spew.Dump(ns)
+	require.NoError(t, err)
+
+	labels := lookupLabels(ns["metadata"])
+	assert.Equal(t, 2, len(labels), "there are two labels in the test namespace")
+	col, ok := labels["colour"]
+	assert.Equal(t, true, ok, "the label colour should be found")
+	assert.Equal(t, "green", col, "the value of label colour should be green")
 }
