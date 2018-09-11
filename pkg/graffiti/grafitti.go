@@ -42,16 +42,16 @@ type Rule struct {
 // Matchers manages the rules of matching an object
 // This type is directly marshalled from config and so has mapstructure tags
 type Matchers struct {
-	LabelSelectors  []string        `mapstructure:"label-selectors"`
-	FieldSelectors  []string        `mapstructure:"field-selectors"`
-	BooleanOperator BooleanOperator `mapstructure:"boolean-operator"`
+	LabelSelectors  []string        `mapstructure:"label-selectors" yaml:"label-selectors,omitempty"`
+	FieldSelectors  []string        `mapstructure:"field-selectors" yaml:"field-selectors,omitempty"`
+	BooleanOperator BooleanOperator `mapstructure:"boolean-operator" yaml:"boolean-operator,omitempty"`
 }
 
 // Additions contains the additional fields that we want to insert into the object
 // This type is directly marshalled from config and so has mapstructure tags
 type Additions struct {
-	Annotations map[string]string `mapstructure:"annotations"`
-	Labels      map[string]string `mapstructure:"labels"`
+	Annotations map[string]string `mapstructure:"annotations" yaml:"annotations,omitempty"`
+	Labels      map[string]string `mapstructure:"labels" yaml:"labels,omitempty"`
 }
 
 // metaObject is used only for pulling out object metadata

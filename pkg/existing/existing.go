@@ -30,13 +30,70 @@ var (
 	discoveryClient     apiDiscoverer
 	discoveredAPIGroups = make(map[string]metav1.APIGroup)
 	discoveredResources = make(map[string][]metav1.APIResource)
-	dynamicClient       dynamic.Interface
+	dynamicClient       mockableDynamicInterface
 	nsCache             namespaceCache
 )
 
+// interface used to mock out the client-go discovery client for testing...
 type apiDiscoverer interface {
 	ServerGroups() (apiGroupList *metav1.APIGroupList, err error)
 	ServerResources() ([]*metav1.APIResourceList, error)
+}
+
+// interfaces used to mock out a cut down set of client-go dynamic interfaces...
+type mockableDynamicInterface interface {
+	Resource(resource schema.GroupVersionResource) mockableNamespaceableResourceInterface
+}
+
+type mockableNamespaceableResourceInterface interface {
+	Namespace(string) mockableResourceInterface
+	mockableResourceInterface
+}
+
+type mockableResourceInterface interface {
+	List(opts metav1.ListOptions) (*unstructured.UnstructuredList, error)
+	Patch(name string, pt types.PatchType, data []byte, subresources ...string) (*unstructured.Unstructured, error)
+}
+
+// concrete types that implement the above interfaces by encapsulating the real client-go types within them...
+type realKubeDynamicInterface struct {
+	client dynamic.Interface
+}
+
+type realKubeNamespaceableResourceInterface struct {
+	nri dynamic.NamespaceableResourceInterface
+}
+
+type realKubeResourceInterface struct {
+	ri dynamic.ResourceInterface
+}
+
+func (r realKubeDynamicInterface) Resource(resource schema.GroupVersionResource) mockableNamespaceableResourceInterface {
+	nri := r.client.Resource(resource)
+	return realKubeNamespaceableResourceInterface{
+		nri: nri,
+	}
+}
+
+func (nri realKubeNamespaceableResourceInterface) Namespace(ns string) mockableResourceInterface {
+	ri := nri.nri.Namespace(ns)
+	return realKubeResourceInterface{ri: ri}
+}
+
+func (nri realKubeNamespaceableResourceInterface) List(opts metav1.ListOptions) (*unstructured.UnstructuredList, error) {
+	return nri.nri.List(opts)
+}
+
+func (nri realKubeNamespaceableResourceInterface) Patch(name string, pt types.PatchType, data []byte, subresources ...string) (*unstructured.Unstructured, error) {
+	return nri.nri.Patch(name, pt, data, subresources...)
+}
+
+func (ri realKubeResourceInterface) List(opts metav1.ListOptions) (*unstructured.UnstructuredList, error) {
+	return ri.ri.List(opts)
+}
+
+func (ri realKubeResourceInterface) Patch(name string, pt types.PatchType, data []byte, subresources ...string) (*unstructured.Unstructured, error) {
+	return ri.ri.Patch(name, pt, data, subresources...)
 }
 
 // InitKubeClients sets up the package for working with kubernetes api and discovers
@@ -50,9 +107,12 @@ func InitKubeClients(rest *rest.Config) error {
 	if err != nil {
 		return fmt.Errorf("can't get a kubernetes discovery client: %v", err)
 	}
-	dynamicClient, err = dynamic.NewForConfig(rest)
+	dc, err := dynamic.NewForConfig(rest)
 	if err != nil {
 		return fmt.Errorf("can't get a kubernetes dynamic client: %v", err)
+	}
+	dynamicClient = realKubeDynamicInterface{
+		client: dc,
 	}
 	nsCache, err = NewNamespaceCache(rest)
 	if err != nil {

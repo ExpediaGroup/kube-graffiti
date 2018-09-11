@@ -1,6 +1,7 @@
 package existing
 
 import (
+	"encoding/json"
 	"errors"
 	"testing"
 
@@ -9,6 +10,8 @@ import (
 	"github.com/stretchr/testify/require"
 	yaml "gopkg.in/yaml.v2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"stash.hcom/run/kube-graffiti/pkg/config"
 )
 
 type mockDiscoveryClient struct {
@@ -236,4 +239,59 @@ func TestServerAPIResourcesLookupFailureReturnsAnError(t *testing.T) {
 
 	err := discoverAPIsAndResources()
 	require.Error(t, err, "we should return an error when server api groups fail")
+}
+
+func TestCheckObjectModifiesANamespace(t *testing.T) {
+	// create a rule which adds a label to a namespace
+	var ruleYaml = `---
+registration:
+  name: add-a-label
+  targets:
+  - api-groups:
+    - ""
+    api-versions:
+    - v1
+    resources:
+    - namespaces
+  failure-policy: Ignore
+matchers:
+  label-selectors:
+  - "fruit=apple"
+additions:
+  labels:
+    added: 'by-graffiti'
+`
+	var rule config.Rule
+	err := yaml.Unmarshal([]byte(ruleYaml), &rule)
+	require.NoError(t, err, "yaml unmarshalling of rule should not fail")
+
+	// the resource to apply the rule against.
+	var resourceJSON = `{
+		"apiVersion": "v1",
+		"kind": "Namespace",
+		"metadata": {
+			"creationTimestamp": "2018-09-10T09:34:31Z",
+			"labels": {
+				"fruit": "apple",
+				"colour": "green"
+			},
+			"name": "test-namespace",
+			"resourceVersion": "561",
+			"selfLink": "/api/v1/namespaces/test-namespace",
+			"uid": "b8337c4c-b4dc-11e8-990c-08002722bfc3"
+		},
+		"spec": {
+			"finalizers": [
+				"kubernetes"
+			]
+		},
+		"status": {
+			"phase": "Active"
+		}
+	}`
+	var resourceObject unstructured.Unstructured
+	err = json.Unmarshal([]byte(resourceJSON), &resourceObject.Object)
+	require.NoError(t, err, "json unmarshalling of namespace resource should not fail")
+	checkObject(&rule, "v1", "test-namespace", resourceObject)
+	panic("boo!")
 }

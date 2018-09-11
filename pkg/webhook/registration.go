@@ -12,18 +12,18 @@ import (
 )
 
 type Registration struct {
-	Name              string   `mapstructure:"name"`
-	Targets           []Target `mapstructure:"targets"`
-	NamespaceSelector string   `mapstructure:"namespace-selector"`
-	FailurePolicy     string   `mapstructure:"failure-policy"`
+	Name              string   `mapstructure:"name" yaml:"name"`
+	Targets           []Target `mapstructure:"targets" yaml:"targets"`
+	NamespaceSelector string   `mapstructure:"namespace-selector" yaml:"namespace-selector,omitempty"`
+	FailurePolicy     string   `mapstructure:"failure-policy" yaml:"failure-policy"`
 }
 
 // Target defines a kubernetes compatible admissionreg.Rule but with mapstructure tags so that we can
 // unmarshal it as part of a Viper structured configuration.
 type Target struct {
-	APIGroups   []string `mapstructure:"api-groups"`
-	APIVersions []string `mapstructure:"api-versions"`
-	Resources   []string `mapstructure:"resources"`
+	APIGroups   []string `mapstructure:"api-groups" yaml:"api-groups"`
+	APIVersions []string `mapstructure:"api-versions" yaml:"api-versions"`
+	Resources   []string `mapstructure:"resources" yaml:"resources"`
 }
 
 // RegisterHook registers our webhook as MutatingWebhook with the kubernetes api.
