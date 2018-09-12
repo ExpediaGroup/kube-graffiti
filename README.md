@@ -116,9 +116,9 @@ rules:
     name: magic-mobile-team-ownership-annotations
     targets:
     - api-groups:
-      - "&ast;"
+      - "*"
       api-versions:
-      - "&ast;"
+      - "*"
       resources:
       - pods
       - deployments
@@ -471,6 +471,44 @@ Checking Existing Objects
 kube-graffiti will check its rules against all the objects in kubernetes upon startup if you set --check-existing flag or set the environment variable GRAFFITI_CHECK_EXISTING=true.  It will interate once through your rules, applying them against all the existing objects in kubernetes which match.  It tries to be a good kubernetes citizen by looking up resources in batches (100 by default) and by caching namespace lookups (used when rules contain namespace selectors).
 
 The rules behave as they would when using them in the mutating webhook, such as giving you the ability to use wildcards "&ast;" in the targetting of API Groups, Versions and Resources, but with subtley different behavoir around versions.  First, I would strongly recommend you use a wildcard for API Version for all of your rules unless you absolutely have to target a specific version of a resource (in the webhook).  Because kubernetes always stores your resources in the preferred version for that resource, it does not make sense to target an existing object with a rule **unless** the rules specifically lists the same preffered resource version (or is a wildcard "&ast;").  This means that is *is* possible to create rules which target non-prefferred versions in the webhook but will not target existing objects.
+
+Example of good practice regarding matching versions: -
+
+```
+    targets:
+    - api-groups:
+      - ""
+      - "appsv1"
+      api-versions:
+      - "*"
+      resources:
+      - pods
+      - deployments
+      - services
+      - jobs
+      - ingresses
+```
+
+or
+
+```
+    targets:
+    - api-groups:
+      - ""
+      api-versions:
+      - "*"
+      resources:
+      - pods
+      - services
+      - jobs
+      - ingresses
+    - api-groups:
+      - "appsv1"
+      api-versions:
+      - "*"
+      resources:
+      - deployments
+```
 
 Contributing
 ------------
