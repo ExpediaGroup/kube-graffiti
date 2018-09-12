@@ -30,7 +30,7 @@ var (
 	discoveryClient     apiDiscoverer
 	discoveredAPIGroups = make(map[string]metav1.APIGroup)
 	discoveredResources = make(map[string][]metav1.APIResource)
-	dynamicClient       mockableDynamicInterface
+	dynamicClient       dynamic.Interface
 	nsCache             namespaceCache
 )
 
@@ -38,62 +38,6 @@ var (
 type apiDiscoverer interface {
 	ServerGroups() (apiGroupList *metav1.APIGroupList, err error)
 	ServerResources() ([]*metav1.APIResourceList, error)
-}
-
-// interfaces used to mock out a cut down set of client-go dynamic interfaces...
-type mockableDynamicInterface interface {
-	Resource(resource schema.GroupVersionResource) mockableNamespaceableResourceInterface
-}
-
-type mockableNamespaceableResourceInterface interface {
-	Namespace(string) mockableResourceInterface
-	mockableResourceInterface
-}
-
-type mockableResourceInterface interface {
-	List(opts metav1.ListOptions) (*unstructured.UnstructuredList, error)
-	Patch(name string, pt types.PatchType, data []byte, subresources ...string) (*unstructured.Unstructured, error)
-}
-
-// concrete types that implement the above interfaces by encapsulating the real client-go types within them...
-type realKubeDynamicInterface struct {
-	client dynamic.Interface
-}
-
-type realKubeNamespaceableResourceInterface struct {
-	nri dynamic.NamespaceableResourceInterface
-}
-
-type realKubeResourceInterface struct {
-	ri dynamic.ResourceInterface
-}
-
-func (r realKubeDynamicInterface) Resource(resource schema.GroupVersionResource) mockableNamespaceableResourceInterface {
-	nri := r.client.Resource(resource)
-	return realKubeNamespaceableResourceInterface{
-		nri: nri,
-	}
-}
-
-func (nri realKubeNamespaceableResourceInterface) Namespace(ns string) mockableResourceInterface {
-	ri := nri.nri.Namespace(ns)
-	return realKubeResourceInterface{ri: ri}
-}
-
-func (nri realKubeNamespaceableResourceInterface) List(opts metav1.ListOptions) (*unstructured.UnstructuredList, error) {
-	return nri.nri.List(opts)
-}
-
-func (nri realKubeNamespaceableResourceInterface) Patch(name string, pt types.PatchType, data []byte, subresources ...string) (*unstructured.Unstructured, error) {
-	return nri.nri.Patch(name, pt, data, subresources...)
-}
-
-func (ri realKubeResourceInterface) List(opts metav1.ListOptions) (*unstructured.UnstructuredList, error) {
-	return ri.ri.List(opts)
-}
-
-func (ri realKubeResourceInterface) Patch(name string, pt types.PatchType, data []byte, subresources ...string) (*unstructured.Unstructured, error) {
-	return ri.ri.Patch(name, pt, data, subresources...)
 }
 
 // InitKubeClients sets up the package for working with kubernetes api and discovers
@@ -107,12 +51,9 @@ func InitKubeClients(rest *rest.Config) error {
 	if err != nil {
 		return fmt.Errorf("can't get a kubernetes discovery client: %v", err)
 	}
-	dc, err := dynamic.NewForConfig(rest)
+	dynamicClient, err = dynamic.NewForConfig(rest)
 	if err != nil {
 		return fmt.Errorf("can't get a kubernetes dynamic client: %v", err)
-	}
-	dynamicClient = realKubeDynamicInterface{
-		client: dc,
 	}
 	nsCache, err = NewNamespaceCache(rest)
 	if err != nil {
@@ -224,6 +165,7 @@ func checkGroupVersion(rule *config.Rule, target webhook.Target, gv metav1.Group
 	// create a list of resources without any subtypes
 	var resourceTargets []string
 	for _, r := range target.Resources {
+		rlog.Debug().Str("resource", r).Msg("adding resource for match")
 		x, _ := splitSlashedResourceString(r)
 		if x == "*" {
 			rlog.Error().Msg("you shouldn't have a wildcard '*' in a list of resources, ignoring")
@@ -234,7 +176,9 @@ func checkGroupVersion(rule *config.Rule, target webhook.Target, gv metav1.Group
 
 	// for each resource in the group/version check if it is targetted list and check
 	for _, resource := range discoveredResources[gv.GroupVersion] {
+		rlog.Debug().Str("resource", resource.Name).Msg("calling isTargetted on resource")
 		if isTargetted(resource.Name, resourceTargets) {
+			rlog.Debug().Str("resource", resource.Name).Msg("resorce is targetted")
 			checkResourceType(rule, gv.GroupVersion, resource)
 		} else {
 			rlog.Debug().Str("resource", resource.Name).Msg("resource is not targetted")
@@ -287,7 +231,7 @@ func checkResourceType(rule *config.Rule, gv string, resource metav1.APIResource
 	}
 	rlog.Debug().Int("number-resources", len(list.Items)).Msg("processing batch of resources")
 	for _, item := range list.Items {
-		checkObject(rule, gv, resource.Name, item)
+		_ = checkObject(rule, gv, resource.Name, item)
 	}
 
 	// if we only got a partial list we need to continue until we have seen them all
@@ -312,7 +256,7 @@ func checkResourceType(rule *config.Rule, gv string, resource metav1.APIResource
 }
 
 // checkObject takes a single kubernete object and decides whether to graffiti it or not.
-func checkObject(rule *config.Rule, gv, resource string, object unstructured.Unstructured) {
+func checkObject(rule *config.Rule, gv, resource string, object unstructured.Unstructured) (patched bool) {
 	mylog := log.ComponentLogger(componentName, "checkObject")
 	kind := object.GetKind()
 	name := object.GetName()
@@ -328,7 +272,7 @@ func checkObject(rule *config.Rule, gv, resource string, object unstructured.Uns
 		}
 		if !match {
 			rlog.Info().Msg("object does not match namespace selector")
-			return
+			return false
 		}
 	}
 
@@ -341,17 +285,17 @@ func checkObject(rule *config.Rule, gv, resource string, object unstructured.Uns
 	raw, err := json.Marshal(object.Object)
 	if err != nil {
 		rlog.Error().Err(err).Msg("could not marshal object")
-		return
+		return false
 	}
 	// call the graffiti package to evaluation the graffiti rule...
 	patch, err := gr.Mutate(raw)
 	if err != nil {
 		rlog.Error().Err(err).Msg("could not mutate object")
-		return
+		return false
 	}
 	if patch == nil {
 		rlog.Info().Msg("mutate did not create a patch")
-		return
+		return false
 	}
 
 	rlog.Debug().Str("patch", string(patch)).Msg("mutate produced a patch")
@@ -372,7 +316,8 @@ func checkObject(rule *config.Rule, gv, resource string, object unstructured.Uns
 	}
 	if err != nil {
 		rlog.Error().Err(err).Msg("failed to patch object")
-		return
+		return false
 	}
 	rlog.Info().Str("patch", string(patch)).Msg("successfully patched object")
+	return true
 }

@@ -212,8 +212,10 @@ func (lw *mockNamespaceListerWatcherGetter) Get(name string, options metav1.GetO
 	return args.Get(0).(*corev1.Namespace), args.Error(1)
 }
 
-func TestLookupOfNamespaceThroughReflector(t *testing.T) {
+func defaultTestNamespaceCache(t *testing.T) namespaceCache {
+	// set up the namespace cache...
 	nl := new(corev1.NamespaceList)
+	// use our testNamespace list we used to test the namespace cache...
 	err := json.Unmarshal([]byte(testNamespaceList), nl)
 	require.NoError(t, err)
 	fw := watch.NewFake()
@@ -224,27 +226,30 @@ func TestLookupOfNamespaceThroughReflector(t *testing.T) {
 	lw.On("List", mock.AnythingOfType("v1.ListOptions")).Return(nl, nil)
 	lw.On("Watch", mock.AnythingOfType("v1.ListOptions")).Return(fw, nil)
 
-	// start the store with reflector
+	// start the store with fake reflector
 	var ns *corev1.Namespace
 	store, reflector := cache.NewNamespaceKeyedIndexerAndReflector(lw, ns, time.Duration(0))
 
-	mycache := namespaceCache{
+	// set up the package level namespace cache with our mocked one...
+	nsCache = namespaceCache{
 		store:     store,
 		reflector: reflector,
 		getter:    lw,
 	}
 	stop := make(chan struct{})
 	defer close(stop)
-	mycache.StartNamespaceReflector(stop)
+	nsCache.StartNamespaceReflector(stop)
 
 	// allow reflector to have started...
 	time.Sleep(1 * time.Second)
+	return nsCache
+}
 
-	ns, err = mycache.LookupNamespace("kube-system")
+func TestLookupOfNamespaceThroughReflector(t *testing.T) {
+	mycache := defaultTestNamespaceCache(t)
+	ns, err := mycache.LookupNamespace("kube-system")
 	assert.NoError(t, err)
 	assert.NotNil(t, ns)
-
-	lw.AssertExpectations(t)
 }
 
 func TestCacheMissFallsBackToGetter(t *testing.T) {

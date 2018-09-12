@@ -3,15 +3,10 @@ package existing
 import (
 	"encoding/json"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	yaml "gopkg.in/yaml.v2"
-	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/watch"
-	"k8s.io/client-go/tools/cache"
 )
 
 var (
@@ -48,7 +43,8 @@ var (
 			"creationTimestamp": "2018-09-10T20:22:29Z",
 			"generation": 1,
 			"labels": {
-				"run": "nginx"
+				"run": "nginx",
+				"fruit": "apple"
 			},
 			"name": "nginx",
 			"namespace": "test-namespace",
@@ -300,33 +296,8 @@ func TestNamespaceSelectorAgainstAnObjectsNamespaceMatch(t *testing.T) {
 	err := json.Unmarshal([]byte(jsonDeploy), &deploy)
 	require.NoError(t, err)
 
-	nl := new(corev1.NamespaceList)
-	// use our testNamespace list we used to test the namespace cache...
-	err = json.Unmarshal([]byte(testNamespaceList), nl)
-	require.NoError(t, err)
-	fw := watch.NewFake()
-
-	// when we call our mock lister-watcher return our canned namespace list
-	lw := new(mockNamespaceListerWatcherGetter)
-	// lo := metav1.ListOptions{}
-	lw.On("List", mock.AnythingOfType("v1.ListOptions")).Return(nl, nil)
-	lw.On("Watch", mock.AnythingOfType("v1.ListOptions")).Return(fw, nil)
-
-	// start the store with fake reflector
-	var ns *corev1.Namespace
-	store, reflector := cache.NewNamespaceKeyedIndexerAndReflector(lw, ns, time.Duration(0))
-
-	mycache := namespaceCache{
-		store:     store,
-		reflector: reflector,
-		getter:    lw,
-	}
-	stop := make(chan struct{})
-	defer close(stop)
-	mycache.StartNamespaceReflector(stop)
-
-	// allow reflector to have started...
-	time.Sleep(1 * time.Second)
+	// use the help function to set up the testing namespace cache
+	mycache := defaultTestNamespaceCache(t)
 
 	// finally check our deploy - which will invoke the looking up of its namespace
 	result, err := matchNamespaceSelector(deploy, "fruit=apple", mycache)
@@ -339,33 +310,8 @@ func TestNamespaceSelectorAgainstAnObjectsMiss(t *testing.T) {
 	err := json.Unmarshal([]byte(jsonDeploy), &deploy)
 	require.NoError(t, err)
 
-	nl := new(corev1.NamespaceList)
-	// use our testNamespace list we used to test the namespace cache...
-	err = json.Unmarshal([]byte(testNamespaceList), nl)
-	require.NoError(t, err)
-	fw := watch.NewFake()
-
-	// when we call our mock lister-watcher return our canned namespace list
-	lw := new(mockNamespaceListerWatcherGetter)
-	// lo := metav1.ListOptions{}
-	lw.On("List", mock.AnythingOfType("v1.ListOptions")).Return(nl, nil)
-	lw.On("Watch", mock.AnythingOfType("v1.ListOptions")).Return(fw, nil)
-
-	// start the store with fake reflector
-	var ns *corev1.Namespace
-	store, reflector := cache.NewNamespaceKeyedIndexerAndReflector(lw, ns, time.Duration(0))
-
-	mycache := namespaceCache{
-		store:     store,
-		reflector: reflector,
-		getter:    lw,
-	}
-	stop := make(chan struct{})
-	defer close(stop)
-	mycache.StartNamespaceReflector(stop)
-
-	// allow reflector to have started...
-	time.Sleep(1 * time.Second)
+	// use the help function to set up the testing namespace cache
+	mycache := defaultTestNamespaceCache(t)
 
 	// finally check our deploy - which will invoke the looking up of its namespace
 	result, err := matchNamespaceSelector(deploy, "fruit=elvis", mycache)

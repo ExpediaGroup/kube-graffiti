@@ -89,6 +89,9 @@ func (c namespaceCache) LookupNamespace(name string) (*corev1.Namespace, error) 
 	mylog := log.ComponentLogger(componentName, "cachingLookupNamespace").With().Str("namespace", name).Logger()
 	mylog.Debug().Msg("looking up namespace")
 
+	if c.store == nil {
+		return &corev1.Namespace{}, fmt.Errorf("the store is nil - not initialized")
+	}
 	ns, exists, err := c.store.GetByKey(name)
 	if err != nil {
 		mylog.Error().Err(err).Msg("error looking up namespace in cache")
