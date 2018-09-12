@@ -465,6 +465,13 @@ metadata:
 
 This is the minimal level of access required for *kube-graffiti* to operate as a mutating webhook.  If you want it to be able to update existing entires (not yet available) then you will need to give *kube-graffiti* **update** permissions on **all** objects that you want it to be able to modify.
 
+Checking Existing Objects
+-------------------------
+
+kube-graffiti will check its rules against all the objects in kubernetes upon startup if you set --check-existing flag or set the environment variable GRAFFITI_CHECK_EXISTING=true.  It will interate once through your rules, applying them against all the existing objects in kubernetes which match.  It tries to be a good kubernetes citizen by looking up resources in batches (100 by default) and by caching namespace lookups (used when rules contain namespace selectors).
+
+The rules behave as they would when using them in the mutating webhook, such as giving you the ability to use wildcards "*" in the targetting of API Groups, Versions and Resources, but with subtley different behavoir around versions.  First, I would strongly recommend you use a wildcard for API Version for all of your rules unless you absolutely have to target a specific version of a resource (in the webhook).  Because kubernetes always stores your resources in the preferred version for that resource, it does not make sense to target an existing object with a rule **unless** the rules specifically lists the same preffered resource version (or is a wildcard "*").  This means that is *is* possible to create rules which target non-prefferred versions in the webhook but will not target existing objects.
+
 Contributing
 ------------
 
