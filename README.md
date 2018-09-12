@@ -116,9 +116,9 @@ rules:
     name: magic-mobile-team-ownership-annotations
     targets:
     - api-groups:
-      - "*"
+      - "&ast;"
       api-versions:
-      - "*"
+      - "&ast;"
       resources:
       - pods
       - deployments
@@ -210,7 +210,7 @@ The goal of the registration is instruct the kubernetes apiserver which kubernet
 
 Each rule requires a unique **name**, which is converted into a URL path that is registered with the kubernetes apiserver routes back to *kube-graffiti* using the 'server.namespace' and 'server.service settings'.  *kube-graffiti* uses the path to match the incoming admission request against the correct rule.
 
-Each registration contains a list of **targets** which are tuples of 'api-groups', 'api-versions' and 'resources' that identify which kubernetes objects we want to delegate to this rule.  They match in the same way that rules match in [kubernetes RBAC Roles](https://kubernetes.io/docs/reference/access-authn-authz/rbac/#referring-to-resources), except that 'verbs' is not used.  You can use the api-group "" to denote the core kubernetes group (i.e. namespaces, pods, secrets, services etc.) and you can also use "*" as wild-cards (warning: use carefully as it is easy to make **everything** route through this rule).  You can specify lists of targets so you target a large number of objects without having to resort to using the wildcards "*".
+Each registration contains a list of **targets** which are tuples of 'api-groups', 'api-versions' and 'resources' that identify which kubernetes objects we want to delegate to this rule.  They match in the same way that rules match in [kubernetes RBAC Roles](https://kubernetes.io/docs/reference/access-authn-authz/rbac/#referring-to-resources), except that 'verbs' is not used.  You can use the api-group "" to denote the core kubernetes group (i.e. namespaces, pods, secrets, services etc.) and you can also use "&ast;" as wild-cards (warning: use carefully as it is easy to make **everything** route through this rule).  You can specify lists of targets so you target a large number of objects without having to resort to using the wildcards "&ast;".
 
 Each rule can contain a single **namespace-selector** which can be used to further narrow a registration to a set of namespaces that match this selector.  The namespace-selector is a kubernetes [label selector](https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/) and so I find it useful to include a *graffiti-rule* that adds a name label to my namespaces so that it can be used in namespace-selectors like this one.
 
@@ -470,7 +470,7 @@ Checking Existing Objects
 
 kube-graffiti will check its rules against all the objects in kubernetes upon startup if you set --check-existing flag or set the environment variable GRAFFITI_CHECK_EXISTING=true.  It will interate once through your rules, applying them against all the existing objects in kubernetes which match.  It tries to be a good kubernetes citizen by looking up resources in batches (100 by default) and by caching namespace lookups (used when rules contain namespace selectors).
 
-The rules behave as they would when using them in the mutating webhook, such as giving you the ability to use wildcards "*" in the targetting of API Groups, Versions and Resources, but with subtley different behavoir around versions.  First, I would strongly recommend you use a wildcard for API Version for all of your rules unless you absolutely have to target a specific version of a resource (in the webhook).  Because kubernetes always stores your resources in the preferred version for that resource, it does not make sense to target an existing object with a rule **unless** the rules specifically lists the same preffered resource version (or is a wildcard "*").  This means that is *is* possible to create rules which target non-prefferred versions in the webhook but will not target existing objects.
+The rules behave as they would when using them in the mutating webhook, such as giving you the ability to use wildcards "&ast;" in the targetting of API Groups, Versions and Resources, but with subtley different behavoir around versions.  First, I would strongly recommend you use a wildcard for API Version for all of your rules unless you absolutely have to target a specific version of a resource (in the webhook).  Because kubernetes always stores your resources in the preferred version for that resource, it does not make sense to target an existing object with a rule **unless** the rules specifically lists the same preffered resource version (or is a wildcard "&ast;").  This means that is *is* possible to create rules which target non-prefferred versions in the webhook but will not target existing objects.
 
 Contributing
 ------------
