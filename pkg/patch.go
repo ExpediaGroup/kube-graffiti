@@ -8,7 +8,7 @@ import (
 	"text/template"
 )
 
-func createPatchOperand(src, add, fm map[string]string, del []string, path string) (string, error) {
+func createPatchOperand(src, add, delete, fm map[string]string, path string) (string, error) {
 	modified := mergeMaps(src)
 
 	// first process any additions into modified map
@@ -21,8 +21,8 @@ func createPatchOperand(src, add, fm map[string]string, del []string, path strin
 	}
 
 	// then process any deletions into modified map
-	if len(del) > 0 {
-		for _, d := range del {
+	if len(delete) > 0 {
+		for _, d := range delete {
 			if _, ok := modified[d]; ok {
 				delete(modified, d)
 			}
@@ -34,11 +34,6 @@ func createPatchOperand(src, add, fm map[string]string, del []string, path strin
 		return "", nil
 	}
 
-	// when we have deleted all labels or annotations then we need to remove the whole path.
-	if len(src) > 0 && len(modified) == 0 {
-		return `{ "op": "delete", "path": "` + path + `" }`, nil
-	}
-	// we are left with new values, we need to either add a new path or replace it.
 	if len(src) == 0 {
 		return renderStringMapAsPatch("add", path, modified), nil
 	}
@@ -47,9 +42,6 @@ func createPatchOperand(src, add, fm map[string]string, del []string, path strin
 
 // renderStringMapAsPatch builds a json patch string from operand, path and a map
 func renderStringMapAsPatch(op, path string, m map[string]string) string {
-	if len(m) == 0 {
-		return ""
-	}
 	patch := `{ "op": "` + op + `", "path": "` + path + `", "value": { `
 	var values []string
 	for k, v := range m {

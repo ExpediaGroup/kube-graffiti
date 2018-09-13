@@ -9,7 +9,6 @@ import (
 
 	// "github.com/davecgh/go-spew/spew"
 
-	"github.com/rs/zerolog"
 	admission "k8s.io/api/admission/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
@@ -45,28 +44,6 @@ type Matchers struct {
 	LabelSelectors  []string        `mapstructure:"label-selectors" yaml:"label-selectors,omitempty"`
 	FieldSelectors  []string        `mapstructure:"field-selectors" yaml:"field-selectors,omitempty"`
 	BooleanOperator BooleanOperator `mapstructure:"boolean-operator" yaml:"boolean-operator,omitempty"`
-}
-
-// Payload contains the actions that we would like to perform when rule matches an object, such as
-// label/annotation additions or deletions, a patch or a block.
-type Payload struct {
-	Additions Additions `mapstructure:"additions" yaml:"additions,omitempty"`
-	Deletions Deletions `mapstructure:"deletions" yaml:"deletions,omitempty"`
-	Block     bool      `mapstructure:"block" yaml:"block,omitempty"`
-	JSONPatch string    `mapstructure:"json-patch" yaml:"json-patch,omitempty"`
-}
-
-// Additions contains the additional fields that we want to insert into the object
-// This type is directly marshalled from config and so has mapstructure tags
-type Additions struct {
-	Annotations map[string]string `mapstructure:"annotations" yaml:"annotations,omitempty"`
-	Labels      map[string]string `mapstructure:"labels" yaml:"labels,omitempty"`
-}
-
-// Deletions contains the names of labels or annotions which you wish to remove
-type Deletions struct {
-	Annotations []string `mapstructure:"annotations" yaml:"annotations,omitempty"`
-	Labels      []string `mapstructure:"labels" yaml:"labels,omitempty"`
 }
 
 // metaObject is used only for pulling out object metadata
@@ -213,7 +190,7 @@ func (r Rule) Mutate(object []byte) (patch []byte, err error) {
 	}
 
 	mylog.Info().Msg("rule matched - painting object")
-	return r.paintObject(metaObject, fieldMap, mylog)
+	return r.Payload.paintObject(metaObject, fieldMap, mylog)
 }
 
 // ValidateFieldSelector checks that a field selector parses correctly and is used when validating config
@@ -315,23 +292,4 @@ func matchFieldSelector(selector string, target map[string]string) (bool, error)
 	}
 	selLog.Debug().Msg("selector matches")
 	return true, nil
-}
-
-func (r Rule) paintObject(object metaObject, fm map[string]string, logger zerolog.Logger) (patch []byte, err error) {
-	mylog := logger.With().Str("func", "paintObject").Logger()
-
-	if len(r.Payload.Additions.Labels) == 0 && len(r.Payload.Additions.Annotations) == 0 {
-		return nil, fmt.Errorf("graffiti rule has no additional labels or annotations")
-	}
-
-	patchString, err := r.createObjectPatch(object, fm)
-	if err != nil {
-		return nil, fmt.Errorf("could not create json patch: %v", err)
-	}
-	if patchString == "" {
-		mylog.Info().Msg("paint resulted in no patch")
-		return nil, nil
-	}
-	mylog.Info().Str("patch", patchString).Msg("created json patch")
-	return []byte(patchString), nil
 }
