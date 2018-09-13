@@ -79,8 +79,9 @@ func NewNamespaceCache(rest *rest.Config) (namespaceCache, error) {
 	}, nil
 }
 
-// StartNamespaceReflector is seperate from the store which we are creating earlier with the rest.Config - we want to
-// pass the reflector a stop channel, which needs to be created and closed within the CheckRulesAgainstExistingState function.
+// StartNamespaceReflector starts the reflector for the Namespace cache.  The reflector is resposible for watching namespaces
+// and updating the cached namespaces when they change in kubernetes.  It is started separately from the store so that we can
+// pass it in a stop channel to instruct it to shutdown once it is no longer needed.
 func (c namespaceCache) StartNamespaceReflector(stop <-chan struct{}) {
 	go c.reflector.Run(stop)
 }
