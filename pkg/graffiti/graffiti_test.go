@@ -109,7 +109,9 @@ func TestReviewObjectDoesNotHaveMetaData(t *testing.T) {
 func TestNoSelectorsMeansMatchEverything(t *testing.T) {
 	// create a Rule
 	rule := Rule{
-		Additions: Additions{Labels: map[string]string{"modified-by-graffiti": "abc123"}},
+		Payload: Payload{
+			Additions: Additions{Labels: map[string]string{"modified-by-graffiti": "abc123"}},
+		},
 	}
 
 	// create a review request
@@ -152,8 +154,10 @@ func TestMatchingLabelSelector(t *testing.T) {
 	rule := Rule{Matchers: Matchers{
 		LabelSelectors: []string{"author = david"},
 	},
-		Additions: Additions{
-			Labels: map[string]string{"modified-by-graffiti": "abc123"},
+		Payload: Payload{
+			Additions: Additions{
+				Labels: map[string]string{"modified-by-graffiti": "abc123"},
+			},
 		},
 	}
 
@@ -177,8 +181,14 @@ func TestMatchingLabelSelector(t *testing.T) {
 func TestInvalidLabelSelector(t *testing.T) {
 	// create a Rule
 	rule := Rule{
-		Matchers:  Matchers{LabelSelectors: []string{"this is not a valid selector"}},
-		Additions: Additions{Labels: map[string]string{"modified-by-graffiti": "abc123"}},
+		Matchers: Matchers{
+			LabelSelectors: []string{"this is not a valid selector"},
+		},
+		Payload: Payload{
+			Additions: Additions{
+				Labels: map[string]string{"modified-by-graffiti": "abc123"},
+			},
+		},
 	}
 
 	// create a review request
@@ -210,8 +220,14 @@ func TestMatchingSelectorWithoutLablesOrAnnotationsProducesNoPatch(t *testing.T)
 func TestLabelSelectorMatchesName(t *testing.T) {
 	// create a Rule
 	rule := Rule{
-		Matchers:  Matchers{LabelSelectors: []string{"name=test-namespace"}},
-		Additions: Additions{Labels: map[string]string{"modified-by-graffiti": "abc123"}},
+		Matchers: Matchers{
+			LabelSelectors: []string{"name=test-namespace"},
+		},
+		Payload: Payload{
+			Additions: Additions{
+				Labels: map[string]string{"modified-by-graffiti": "abc123"},
+			},
+		},
 	}
 
 	// create a review request
@@ -234,8 +250,14 @@ func TestLabelSelectorMatchesName(t *testing.T) {
 func TestMultipleLabelSelectorsAreORed(t *testing.T) {
 	// create a Rule
 	rule := Rule{
-		Matchers:  Matchers{LabelSelectors: []string{"name=not-a-name-that-matches", "author = david"}},
-		Additions: Additions{Labels: map[string]string{"modified-by-graffiti": "abc123"}},
+		Matchers: Matchers{
+			LabelSelectors: []string{"name=not-a-name-that-matches", "author = david"},
+		},
+		Payload: Payload{
+			Additions: Additions{
+				Labels: map[string]string{"modified-by-graffiti": "abc123"},
+			},
+		},
 	}
 
 	// create a review request
@@ -258,8 +280,14 @@ func TestMultipleLabelSelectorsAreORed(t *testing.T) {
 func TestHandlesNoSourceObjectLabels(t *testing.T) {
 	// create a Rule
 	rule := Rule{
-		Matchers:  Matchers{LabelSelectors: []string{"name=test-namespace"}},
-		Additions: Additions{Labels: map[string]string{"modified-by-graffiti": "abc123"}},
+		Matchers: Matchers{
+			LabelSelectors: []string{"name=test-namespace"},
+		},
+		Payload: Payload{
+			Additions: Additions{
+				Labels: map[string]string{"modified-by-graffiti": "abc123"},
+			},
+		},
 	}
 
 	var noLabels = `{  
@@ -319,9 +347,11 @@ func TestSimpleFieldSelectorMiss(t *testing.T) {
 		Matchers: Matchers{
 			FieldSelectors: []string{"author = david"},
 		},
-		Additions: Additions{
-			Labels:      map[string]string{"modified-by-graffiti": "abc123"},
-			Annotations: map[string]string{"flash": "saviour of the universe"},
+		Payload: Payload{
+			Additions: Additions{
+				Labels:      map[string]string{"modified-by-graffiti": "abc123"},
+				Annotations: map[string]string{"flash": "saviour of the universe"},
+			},
 		},
 	}
 
@@ -339,10 +369,14 @@ func TestSimpleFieldSelectorMiss(t *testing.T) {
 func TestMatchingSimpleFieldSelectorHit(t *testing.T) {
 	// create a Rule
 	rule := Rule{
-		Matchers: Matchers{FieldSelectors: []string{"metadata.annotations.level=v.special"}},
-		Additions: Additions{
-			Labels:      map[string]string{"modified-by-graffiti": "abc123"},
-			Annotations: map[string]string{"flash": "saviour of the universe"},
+		Matchers: Matchers{
+			FieldSelectors: []string{"metadata.annotations.level=v.special"},
+		},
+		Payload: Payload{
+			Additions: Additions{
+				Labels:      map[string]string{"modified-by-graffiti": "abc123"},
+				Annotations: map[string]string{"flash": "saviour of the universe"},
+			},
 		},
 	}
 
@@ -366,10 +400,14 @@ func TestMatchingSimpleFieldSelectorHit(t *testing.T) {
 func TestMatchingNegativeSimpleFieldSelector(t *testing.T) {
 	// create a Rule
 	rule := Rule{
-		Matchers: Matchers{FieldSelectors: []string{"metadata.annotations.level!=elvis"}},
-		Additions: Additions{
-			Labels:      map[string]string{"modified-by-graffiti": "abc123"},
-			Annotations: map[string]string{"flash": "saviour of the universe"},
+		Matchers: Matchers{
+			FieldSelectors: []string{"metadata.annotations.level!=elvis"},
+		},
+		Payload: Payload{
+			Additions: Additions{
+				Labels:      map[string]string{"modified-by-graffiti": "abc123"},
+				Annotations: map[string]string{"flash": "saviour of the universe"},
+			},
 		},
 	}
 
@@ -393,10 +431,14 @@ func TestMatchingNegativeSimpleFieldSelector(t *testing.T) {
 func TestSuccessfullCombinedFieldSelector(t *testing.T) {
 	// create a Rule
 	rule := Rule{
-		Matchers: Matchers{FieldSelectors: []string{"status.phase=Active,metadata.annotations.level=v.special"}},
-		Additions: Additions{
-			Labels:      map[string]string{"modified-by-graffiti": "abc123"},
-			Annotations: map[string]string{"flash": "saviour of the universe"},
+		Matchers: Matchers{
+			FieldSelectors: []string{"status.phase=Active,metadata.annotations.level=v.special"},
+		},
+		Payload: Payload{
+			Additions: Additions{
+				Labels:      map[string]string{"modified-by-graffiti": "abc123"},
+				Annotations: map[string]string{"flash": "saviour of the universe"},
+			},
 		},
 	}
 
@@ -420,10 +462,14 @@ func TestSuccessfullCombinedFieldSelector(t *testing.T) {
 func TestCombinedFieldSelectorShouldANDTheCommaSeparatedSelectors(t *testing.T) {
 	// create a Rule
 	rule := Rule{
-		Matchers: Matchers{FieldSelectors: []string{"status.phase=Active,metadata.annotations.level=not-very-special"}},
-		Additions: Additions{
-			Labels:      map[string]string{"modified-by-graffiti": "abc123"},
-			Annotations: map[string]string{"flash": "saviour of the universe"},
+		Matchers: Matchers{
+			FieldSelectors: []string{"status.phase=Active,metadata.annotations.level=not-very-special"},
+		},
+		Payload: Payload{
+			Additions: Additions{
+				Labels:      map[string]string{"modified-by-graffiti": "abc123"},
+				Annotations: map[string]string{"flash": "saviour of the universe"},
+			},
 		},
 	}
 
@@ -441,8 +487,14 @@ func TestCombinedFieldSelectorShouldANDTheCommaSeparatedSelectors(t *testing.T) 
 func TestInvalidFieldSelector(t *testing.T) {
 	// create a Rule
 	rule := Rule{
-		Matchers:  Matchers{FieldSelectors: []string{"this is not a valid selector"}},
-		Additions: Additions{Labels: map[string]string{"modified-by-graffiti": "abc123"}},
+		Matchers: Matchers{
+			FieldSelectors: []string{"this is not a valid selector"},
+		},
+		Payload: Payload{
+			Additions: Additions{
+				Labels: map[string]string{"modified-by-graffiti": "abc123"},
+			},
+		},
 	}
 
 	// create a review request
@@ -459,10 +511,14 @@ func TestInvalidFieldSelector(t *testing.T) {
 func TestORMultipleFieldSelectors(t *testing.T) {
 	// create a Rule
 	rule := Rule{
-		Matchers: Matchers{FieldSelectors: []string{"metadata.name=not-matching", "status.phase=Active"}},
-		Additions: Additions{
-			Labels:      map[string]string{"modified-by-graffiti": "abc123"},
-			Annotations: map[string]string{"flash": "saviour of the universe"},
+		Matchers: Matchers{
+			FieldSelectors: []string{"metadata.name=not-matching", "status.phase=Active"},
+		},
+		Payload: Payload{
+			Additions: Additions{
+				Labels:      map[string]string{"modified-by-graffiti": "abc123"},
+				Annotations: map[string]string{"flash": "saviour of the universe"},
+			},
 		},
 	}
 
@@ -486,10 +542,14 @@ func TestORMultipleFieldSelectors(t *testing.T) {
 func TestMatchingComplexFieldSelectorHit(t *testing.T) {
 	// create a Rule
 	rule := Rule{
-		Matchers: Matchers{FieldSelectors: []string{"metadata.annotations.prometheus.io/path=/metrics"}},
-		Additions: Additions{
-			Labels:      map[string]string{"modified-by-graffiti": "abc123"},
-			Annotations: map[string]string{"flash": "saviour of the universe"},
+		Matchers: Matchers{
+			FieldSelectors: []string{"metadata.annotations.prometheus.io/path=/metrics"},
+		},
+		Payload: Payload{
+			Additions: Additions{
+				Labels:      map[string]string{"modified-by-graffiti": "abc123"},
+				Annotations: map[string]string{"flash": "saviour of the universe"},
+			},
 		},
 	}
 
@@ -517,9 +577,11 @@ func TestLabelAndFieldSelectorsANDTogetherByDefault(t *testing.T) {
 			LabelSelectors: []string{"a-label=which-will-not-match"},
 			FieldSelectors: []string{"metadata.annotations.prometheus.io/path=/metrics"},
 		},
-		Additions: Additions{
-			Labels:      map[string]string{"modified-by-graffiti": "abc123"},
-			Annotations: map[string]string{"flash": "saviour of the universe"},
+		Payload: Payload{
+			Additions: Additions{
+				Labels:      map[string]string{"modified-by-graffiti": "abc123"},
+				Annotations: map[string]string{"flash": "saviour of the universe"},
+			},
 		},
 	}
 
@@ -542,9 +604,11 @@ func TestLabelAndFieldSelectorsANDSpecified(t *testing.T) {
 			FieldSelectors:  []string{"metadata.annotations.prometheus.io/path=/metrics"},
 			BooleanOperator: AND,
 		},
-		Additions: Additions{
-			Labels:      map[string]string{"modified-by-graffiti": "abc123"},
-			Annotations: map[string]string{"flash": "saviour of the universe"},
+		Payload: Payload{
+			Additions: Additions{
+				Labels:      map[string]string{"modified-by-graffiti": "abc123"},
+				Annotations: map[string]string{"flash": "saviour of the universe"},
+			},
 		},
 	}
 
@@ -568,9 +632,11 @@ func TestAnEmptySelectorAlwaysMatchesWithAND(t *testing.T) {
 			FieldSelectors:  []string{},
 			BooleanOperator: AND,
 		},
-		Additions: Additions{
-			Labels:      map[string]string{"modified-by-graffiti": "abc123"},
-			Annotations: map[string]string{"flash": "saviour of the universe"},
+		Payload: Payload{
+			Additions: Additions{
+				Labels:      map[string]string{"modified-by-graffiti": "abc123"},
+				Annotations: map[string]string{"flash": "saviour of the universe"},
+			},
 		},
 	}
 
@@ -598,9 +664,11 @@ func TestLabelAndFieldSelectorsORSelected(t *testing.T) {
 			FieldSelectors:  []string{"metadata.annotations.prometheus.io/path=/metrics"},
 			BooleanOperator: OR,
 		},
-		Additions: Additions{
-			Labels:      map[string]string{"modified-by-graffiti": "abc123"},
-			Annotations: map[string]string{"flash": "saviour of the universe"},
+		Payload: Payload{
+			Additions: Additions{
+				Labels:      map[string]string{"modified-by-graffiti": "abc123"},
+				Annotations: map[string]string{"flash": "saviour of the universe"},
+			},
 		},
 	}
 
@@ -629,9 +697,11 @@ func TestAnEmptySelectorNeverMatchesWithOR(t *testing.T) {
 			FieldSelectors:  []string{},
 			BooleanOperator: OR,
 		},
-		Additions: Additions{
-			Labels:      map[string]string{"modified-by-graffiti": "abc123"},
-			Annotations: map[string]string{"flash": "saviour of the universe"},
+		Payload: Payload{
+			Additions: Additions{
+				Labels:      map[string]string{"modified-by-graffiti": "abc123"},
+				Annotations: map[string]string{"flash": "saviour of the universe"},
+			},
 		},
 	}
 
@@ -654,9 +724,11 @@ func TestLabelAndFieldSelectorsXORSelectedWithSingleMatch(t *testing.T) {
 			FieldSelectors:  []string{"metadata.annotations.prometheus.io/path=/metrics"},
 			BooleanOperator: XOR,
 		},
-		Additions: Additions{
-			Labels:      map[string]string{"modified-by-graffiti": "abc123"},
-			Annotations: map[string]string{"flash": "saviour of the universe"},
+		Payload: Payload{
+			Additions: Additions{
+				Labels:      map[string]string{"modified-by-graffiti": "abc123"},
+				Annotations: map[string]string{"flash": "saviour of the universe"},
+			},
 		},
 	}
 
@@ -684,9 +756,11 @@ func TestLabelAndFieldSelectorsXORWithBothMatchedIsFalse(t *testing.T) {
 			FieldSelectors:  []string{"metadata.annotations.prometheus.io/path=/metrics"},
 			BooleanOperator: XOR,
 		},
-		Additions: Additions{
-			Labels:      map[string]string{"modified-by-graffiti": "abc123"},
-			Annotations: map[string]string{"flash": "saviour of the universe"},
+		Payload: Payload{
+			Additions: Additions{
+				Labels:      map[string]string{"modified-by-graffiti": "abc123"},
+				Annotations: map[string]string{"flash": "saviour of the universe"},
+			},
 		},
 	}
 
@@ -709,9 +783,11 @@ func TestLabelAndFieldSelectorsXORanEmptySelectorIsNotAMatch(t *testing.T) {
 			FieldSelectors:  []string{},
 			BooleanOperator: XOR,
 		},
-		Additions: Additions{
-			Labels:      map[string]string{"modified-by-graffiti": "abc123"},
-			Annotations: map[string]string{"flash": "saviour of the universe"},
+		Payload: Payload{
+			Additions: Additions{
+				Labels:      map[string]string{"modified-by-graffiti": "abc123"},
+				Annotations: map[string]string{"flash": "saviour of the universe"},
+			},
 		},
 	}
 
@@ -728,11 +804,14 @@ func TestLabelAndFieldSelectorsXORanEmptySelectorIsNotAMatch(t *testing.T) {
 
 func TestWhenAdditionsAlreadyThereProducesNoPatch(t *testing.T) {
 	// create a Rule
-	rule := Rule{Matchers: Matchers{
-		LabelSelectors: []string{"author = david"},
-	},
-		Additions: Additions{
-			Labels: map[string]string{"author": "david"},
+	rule := Rule{
+		Matchers: Matchers{
+			LabelSelectors: []string{"author = david"},
+		},
+		Payload: Payload{
+			Additions: Additions{
+				Labels: map[string]string{"author": "david"},
+			},
 		},
 	}
 

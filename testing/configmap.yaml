@@ -28,9 +28,10 @@ data:
           resources:
           - namespaces
         failure-policy: Ignore
-      additions:
-        labels:
-          name: '{{ index . "metadata.name" }}'
+      payload:
+        additions:
+          labels:
+            name: '{{ index . "metadata.name" }}'
     - registration:
         name: namespaces-istio-and-kiam
         targets:
@@ -44,11 +45,12 @@ data:
       matchers:
         label-selectors:
         -  "name notin (kube-system,kube-public,default)"
-      additions:
-        labels:
-          istio-injection: enabled
-        annotations:
-          iam.amazonaws.com/permitted: ".*"
+      payload:
+        additions:
+          labels:
+            istio-injection: enabled
+          annotations:
+            iam.amazonaws.com/permitted: ".*"
     - registration:
         name: mobile-magic-ownership-markers
         targets:
@@ -66,9 +68,10 @@ data:
           - configmaps
         namespace-selector: name = mobile-team
         failure-policy: Ignore
-      additions:
-        annotations:
-          owner: "Stephanie Jobs"
-          security-zone: "alpha"
-          contact: "mobileteam@mycorp.com"
-          wiki: "http://wiki.mycorp.com/mobile-team"
+      payload:
+        additions:
+          annotations:
+            owner: "Stephanie Jobs"
+            security-zone: "alpha"
+            contact: "mobileteam@mycorp.com"
+            wiki: "http://wiki.mycorp.com/mobile-team"

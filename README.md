@@ -36,9 +36,10 @@ rules:
   matchers:
     label-selectors:
     - "name notin (kube-system,kube-public,default)"
-  additions:
-    labels:
-      istio-injection: enabled
+  payload:
+    additions:
+      labels:
+        istio-injection: enabled
 ```
 *note* - 'name' and 'namespace' metadata fields can be used as though they are labels in our label-selectors.
 
@@ -63,9 +64,10 @@ rules:
     - "metadata.name=team-a"
     - "metadata.name=team-b"
     - "metadata.name=team-c"
-  additions:
-    annotations:
-      iam.amazonaws.com/permitted: ".*"
+  payload:
+    additions:
+      annotations:
+        iam.amazonaws.com/permitted: ".*"
 ```
 *note1* - a list of matcher label or field selectors are evaluated as an logical **OR**, and comma separated selectors within a single selector is treated as a logical **AND**
 
@@ -85,9 +87,10 @@ rules:
       resources:
       - namespaces
     failure-policy: Ignore
-  additions:
-    labels:
-      name: '{{ index . "metadata.name" }}'
+  payload:
+    additions:
+      labels:
+        name: '{{ index . "metadata.name" }}'
 ```
 *note1* - a rule without any matcher section will match **ALL**
 *note2* - addition values can be golang templates (but not keys)
@@ -109,9 +112,10 @@ rules:
       resources:
       - namespaces
     failure-policy: Ignore
-  additions:
-    labels:
-      name: '{{ index . "metadata.name" }}'
+  payload:
+    additions:
+      labels:
+        name: '{{ index . "metadata.name" }}'
 - registration:
     name: magic-mobile-team-ownership-annotations
     targets:
@@ -127,12 +131,13 @@ rules:
       - ingresses
     namespace-selector: name = mobile-team
     failure-policy: Ignore
-  additions:
-    labels:
-      owner: "Stephanie Jobs"
-      security-zone: "alpha"
-      contact: "mobileteam@mycorp.com"
-      wiki: "http://wiki.mycorp.com/mobile-team"
+  payload:
+    additions:
+      labels:
+        owner: "Stephanie Jobs"
+        security-zone: "alpha"
+        contact: "mobileteam@mycorp.com"
+        wiki: "http://wiki.mycorp.com/mobile-team"
 ```
 *note1* - this uses the namespace-selector within the registration to pass only objects within the 'mobile-team' namespace to the *kube-graffiti* webhook.
 *note2* - the 'add-name-label-to-namespaces' rule has been added to provide the required name label on the namespace.
@@ -184,9 +189,9 @@ You need to have at least one rule in your configuration and can scale to as man
 
 A graffiti rule is made up of three parts:-
 
-* registration - responsible for registering the rule as a mutating webhook.
-* matcher - responsible for matching/evaluating the object to decide whether we paint it or not.
-* additions - the labels or annotations we will add to the object if it matcher rules match.
+* **registration** - responsible for registering the rule as a mutating webhook.
+* **matcher** - responsible for matching/evaluating the object to decide whether we paint it or not.
+* **payload** - contains the changes that you want to make to the object
 
 The rules are validated at start up and *kube-graffiti* will fail-fast if it finds any problems, check the logs to make sure you haven't entered any invalid selectors, labels or annotations.
 
@@ -317,26 +322,37 @@ Unfortunately, at this time, neither label or field selectors support regex matc
 
 By default, both label-selectors AND field-selectors must match the object, *where they are specified*, for the result to be true.  This means that the result is effectively an AND when both selectors are set and an OR if only one selector is (with unset one evaluating to false).  If you omit both matchers then the result will **always** be true (this means anything matching the registration rule will always be painted).  You can change the logical operator used to combine results of the label and field selectors using the boolean-operator setting, from the default "AND" to "OR" or "XOR".  I have no idea of a real-world use-case for XOR but I think that OR may prove useful to someone.
 
+**Payload**
+
+The payload section allows you to: -
+
+* add labels or annotations in **additions**
+* delete labels or annotations in **deletions** (Work in progress)
+
+Each graffiti rule must contain at least one addition or deletion.
+
 **Additions**
 
 ```
-  additions:
-    labels:
-        istio-injection: enabled
-    annotations:
-        iam.amazonaws.com/permitted: ".*"
+  payload:
+    additions:
+      labels:
+          istio-injection: enabled
+      annotations:
+          iam.amazonaws.com/permitted: ".*"
 ```
 
-Additions are the payload part of each graffiti rule, these are the things that get added into a matching object.  *kube-graffiti* supports the adding of lists of labels and annotations.  Each *kube-graffiti* rule must contain at least one addition, and each must conform to the syntax of either labels or annotations.  The above example add both a label and an annotation.
+*kube-graffiti* supports the adding of lists of labels and annotations.  All additions must conform to the corresponding syntax of either labels or annotations.  The above example adds both a label and an annotation.
 
-The value of a label or annotation can contain [golang template](https://golang.org/pkg/text/template/) annotations which allows a limited construction of values from the fields of the source object.  The flatten object map that was described in the 'Matchers' section which is a golang map[string]string is available as the context to the template and can be referrenced using golang template's 'index' function.
+The value of a label or annotation can contain [golang template](https://golang.org/pkg/text/template/) annotations which allows a limited construction of values from the fields of the source object.  The flattened object map (that was described in the 'Matchers' section and which is a golang map[string]string) is available as the context to the template and can be referrenced using golang template's 'index' function.
 
 Here's an example of combining a pods name with its uid in order to create a sort of asset tag kind of thing:-
 
 ```
-  additions:
-    labels:
-      asset-tag: 'pod/prod/k8s/{{ index . "metadata.namespace"}}/{{ index . "metadata.name" }}/{{ index . "metadata.uid" }}'
+  payload:
+    additions:
+      labels:
+        asset-tag: 'pod/prod/k8s/{{ index . "metadata.namespace"}}/{{ index . "metadata.name" }}/{{ index . "metadata.uid" }}'
 ```
 
 kubernetes RBAC rules

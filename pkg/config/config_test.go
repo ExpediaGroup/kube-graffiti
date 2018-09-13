@@ -41,9 +41,10 @@ rules:
     label-selectors:
     - "name = dave"
     - "dave = true"
-  additions:
-    labels:
-      result: "this_is_indeed_daveish"
+  payload:
+    additions:
+      labels:
+        result: "this_is_indeed_daveish"
 - registration:
     name: annotate-everything-except-kube-system
     failure-policy: Ignore
@@ -57,9 +58,10 @@ rules:
   matchers:
     field-selectors:
     -  "metadata.namespace != kube-system"
-  additions:
-    annotations:
-      graffiti: "woz_'ere_2018"
+  payload:
+    additions:
+      annotations:
+        graffiti: "woz_'ere_2018"
 `
 
 func TestParseConfig(t *testing.T) {
@@ -194,9 +196,10 @@ rules:
   matchers:
     label-selectors:
     -  "name=test-pod"
-  additions:
-    annotations:
-      graffiti: "painted this object"
+  payload:
+    additions:
+      annotations:
+        graffiti: "painted this object"
 `
 	// read viper config from our test config file
 	setDefaults()
@@ -249,17 +252,19 @@ rules:
   matchers:
     label-selectors:
     -  "name=test-pod"
-  additions:
-    annotations:
-      graffiti: "painted this object"
+  payload:
+    additions:
+      annotations:
+        graffiti: "painted this object"
 - registration:
     name: my-rule
   matchers:
     label-selectors:
     -  "name=another-test-pod"
-  additions:
-    labels:
-      graffiti: "painted this object"
+  payload:
+    additions:
+      labels:
+        graffiti: "painted this object"
 `
 	// read viper config from our test config file
 	setDefaults()
@@ -286,9 +291,10 @@ rules:
   matchers:
     label-selectors:
     -  "i don't know what you hope this label selector will do?"
-  additions:
-    annotations:
-      graffiti: "painted this object"
+  payload:
+    additions:
+      annotations:
+        graffiti: "painted this object"
 `
 	// read viper config from our test config file
 	setDefaults()
@@ -316,9 +322,10 @@ rules:
   matchers:
     label-selectors:
     -  "namespace notin (default,kube-system,kube-public)"
-  additions:
-    annotations:
-      graffiti: "painted this object"
+  payload:
+    additions:
+      annotations:
+        graffiti: "painted this object"
 `
 	// read viper config from our test config file
 	setDefaults()
@@ -346,9 +353,10 @@ rules:
   matchers:
     field-selectors:
     -  "metadata.name = dave"
-  additions:
-    annotations:
-      graffiti: "painted this object"
+  payload:
+    additions:
+      annotations:
+        graffiti: "painted this object"
 `
 	// read viper config from our test config file
 	setDefaults()
@@ -376,9 +384,10 @@ rules:
   matchers:
     field-selectors:
     -  "namespace notin (default,kube-system,kube-public)"
-  additions:
-    annotations:
-      graffiti: "painted this object"
+  payload:
+    additions:
+      annotations:
+        graffiti: "painted this object"
 `
 	// read viper config from our test config file
 	setDefaults()
@@ -402,9 +411,10 @@ server:
 rules:
 - registration:
     name: my-rule
-  additions:
-    labels:
-      add-me: "true"
+  payload:
+    additions:
+      labels:
+        add-me: "true"
 `
 	// read viper config from our test config file
 	setDefaults()
@@ -428,9 +438,10 @@ server:
 rules:
 - registration:
     name: my-rule
-  additions:
-    labels:
-      "dave.com/multiple/slashes": "painted this object"
+  payload:
+    additions:
+      labels:
+        "dave.com/multiple/slashes": "painted this object"
 `
 	// read viper config from our test config file
 	setDefaults()
@@ -454,9 +465,10 @@ server:
 rules:
 - registration:
     name: my-rule
-  additions:
-    labels:
-      "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx": "painted this object"
+  payload:
+    additions:
+      labels:
+        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx": "painted this object"
 `
 	// read viper config from our test config file
 	setDefaults()
@@ -480,9 +492,10 @@ server:
 rules:
 - registration:
     name: my-rule
-  additions:
-    labels:
-      valid-label: "label values can't contain spaces"
+  payload:
+    additions:
+      labels:
+        valid-label: "label values can't contain spaces"
 `
 	// read viper config from our test config file
 	setDefaults()
@@ -506,9 +519,10 @@ server:
 rules:
 - registration:
     name: my-rule
-  additions:
-    labels:
-      add-me: "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+  payload:
+    additions:
+      labels:
+        add-me: "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 `
 	// read viper config from our test config file
 	setDefaults()
@@ -532,9 +546,10 @@ server:
 rules:
 - registration:
     name: my-rule
-  additions:
-    annotations:
-      ming-industries.com/mercy: "never on my watch!"
+  payload:
+    additions:
+      annotations:
+        ming-industries.com/mercy: "never on my watch!"
 `
 	// read viper config from our test config file
 	setDefaults()
@@ -558,9 +573,10 @@ server:
 rules:
 - registration:
     name: my-rule
-  additions:
-    annotations:
-      "dave.com/multiple/slashes": "painted this object"
+  payload:
+    additions:
+      annotations:
+        "dave.com/multiple/slashes": "painted this object"
 `
 	// read viper config from our test config file
 	setDefaults()

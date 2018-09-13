@@ -53,7 +53,7 @@ type Server struct {
 type Rule struct {
 	Registration webhook.Registration `mapstructure:"registration" yaml:"registration"`
 	Matchers     graffiti.Matchers    `mapstructure:"matchers" yaml:"matchers,omitempty"`
-	Additions    graffiti.Additions   `mapstructure:"additions" yaml:"additions"`
+	Payload      graffiti.Payload     `mapstructure:"payload" yaml:"payload"`
 }
 
 // LoadConfig is reponsible for loading the viper configuration file.
@@ -217,15 +217,15 @@ func (rule Rule) validateRuleSelectors(rulelog zerolog.Logger) error {
 
 func (rule Rule) validateRuleAdditions(rulelog zerolog.Logger) error {
 	// rules need to contain one or more label or annotation additions...
-	if len(rule.Additions.Labels) == 0 && len(rule.Additions.Annotations) == 0 {
+	if len(rule.Payload.Additions.Labels) == 0 && len(rule.Payload.Additions.Annotations) == 0 {
 		rulelog.Error().Msg("invalid rule - it does not contain any additional labels or annotations")
 		return fmt.Errorf("rule %s is invalid - it does not contain any additional labels or annotations", rule.Registration.Name)
 	}
 
 	// validate all additions labels using kubernetes validation methods
 	templateRegex := regexp.MustCompile(`\{\{.*\}\}`)
-	if len(rule.Additions.Labels) > 0 {
-		for k, v := range rule.Additions.Labels {
+	if len(rule.Payload.Additions.Labels) > 0 {
+		for k, v := range rule.Payload.Additions.Labels {
 			if errorList := utilvalidation.IsQualifiedName(k); len(errorList) != 0 {
 				rulelog.Error().Str("label-key", k).Str("errors", strings.Join(errorList, "; ")).Msg("rule contains invalid additions label key")
 				return fmt.Errorf("rule %s contains invalid label key: %s", rule.Registration.Name, strings.Join(errorList, "; "))
@@ -243,8 +243,8 @@ func (rule Rule) validateRuleAdditions(rulelog zerolog.Logger) error {
 
 	// validate all additions annotations by using kubernetes validation methods
 	path := field.NewPath("metadata.annotations")
-	if len(rule.Additions.Annotations) > 0 {
-		if errorList := apivalidation.ValidateAnnotations(rule.Additions.Annotations, path); len(errorList) != 0 {
+	if len(rule.Payload.Additions.Annotations) > 0 {
+		if errorList := apivalidation.ValidateAnnotations(rule.Payload.Additions.Annotations, path); len(errorList) != 0 {
 			var info []string
 			for _, errorPart := range errorList.ToAggregate().Errors() {
 				info = append(info, errorPart.Error())

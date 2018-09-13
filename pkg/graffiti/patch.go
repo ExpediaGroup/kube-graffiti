@@ -14,8 +14,8 @@ import (
 func (r Rule) createObjectPatch(obj metaObject, fm map[string]string) (string, error) {
 	var patches []string
 
-	if len(r.Additions.Labels) > 0 {
-		op, err := createPatchOperand(obj.Meta.Labels, r.Additions.Labels, fm, "/metadata/labels")
+	if len(r.Payload.Additions.Labels) > 0 {
+		op, err := createPatchOperand(obj.Meta.Labels, r.Payload.Additions.Labels, fm, "/metadata/labels")
 		if err != nil {
 			return "", err
 		}
@@ -24,8 +24,8 @@ func (r Rule) createObjectPatch(obj metaObject, fm map[string]string) (string, e
 		}
 	}
 
-	if len(r.Additions.Annotations) > 0 {
-		op, err := createPatchOperand(obj.Meta.Annotations, r.Additions.Annotations, fm, "/metadata/annotations")
+	if len(r.Payload.Additions.Annotations) > 0 {
+		op, err := createPatchOperand(obj.Meta.Annotations, r.Payload.Additions.Annotations, fm, "/metadata/annotations")
 		if err != nil {
 			return "", err
 		}

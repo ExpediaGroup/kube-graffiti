@@ -31,12 +31,12 @@ const (
 	XOR
 )
 
-// Rule contains a single graffiti rule and contains matchers for choosing which objects to change and additions which are the fields we want to add.
+// Rule contains a single graffiti rule and contains matchers for choosing which objects to change and payload containing the change.
 // It does not have mapstructure tags because it is not directly marshalled from config
 type Rule struct {
-	Name      string
-	Matchers  Matchers
-	Additions Additions
+	Name     string
+	Matchers Matchers
+	Payload  Payload
 }
 
 // Matchers manages the rules of matching an object
@@ -47,11 +47,26 @@ type Matchers struct {
 	BooleanOperator BooleanOperator `mapstructure:"boolean-operator" yaml:"boolean-operator,omitempty"`
 }
 
+// Payload contains the actions that we would like to perform when rule matches an object, such as
+// label/annotation additions or deletions, a patch or a block.
+type Payload struct {
+	Additions Additions `mapstructure:"additions" yaml:"additions,omitempty"`
+	Deletions Deletions `mapstructure:"deletions" yaml:"deletions,omitempty"`
+	Block     bool      `mapstructure:"block" yaml:"block,omitempty"`
+	JSONPatch string    `mapstructure:"json-patch" yaml:"json-patch,omitempty"`
+}
+
 // Additions contains the additional fields that we want to insert into the object
 // This type is directly marshalled from config and so has mapstructure tags
 type Additions struct {
 	Annotations map[string]string `mapstructure:"annotations" yaml:"annotations,omitempty"`
 	Labels      map[string]string `mapstructure:"labels" yaml:"labels,omitempty"`
+}
+
+// Deletions contains the names of labels or annotions which you wish to remove
+type Deletions struct {
+	Annotations []string `mapstructure:"annotations" yaml:"annotations,omitempty"`
+	Labels      []string `mapstructure:"labels" yaml:"labels,omitempty"`
 }
 
 // metaObject is used only for pulling out object metadata
@@ -305,7 +320,7 @@ func matchFieldSelector(selector string, target map[string]string) (bool, error)
 func (r Rule) paintObject(object metaObject, fm map[string]string, logger zerolog.Logger) (patch []byte, err error) {
 	mylog := logger.With().Str("func", "paintObject").Logger()
 
-	if len(r.Additions.Labels) == 0 && len(r.Additions.Annotations) == 0 {
+	if len(r.Payload.Additions.Labels) == 0 && len(r.Payload.Additions.Annotations) == 0 {
 		return nil, fmt.Errorf("graffiti rule has no additional labels or annotations")
 	}
 
