@@ -185,7 +185,7 @@ func initExistingCheck(config *config.Configuration, r *rest.Config) error {
 	if err = existing.InitKubeClients(r); err != nil {
 		return err
 	}
-	existing.CheckRulesAgainstExistingState(config.Rules)
+	existing.ApplyRulesAgainstExistingObjects(config.Rules)
 
 	mylog.Info().Msg("check of existing objects completed successfully")
 

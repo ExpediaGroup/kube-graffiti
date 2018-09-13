@@ -196,7 +196,7 @@ func TestNamespaceSelectorAgainstANamespaceMatchesItsLabelsTestSuccess(t *testin
 	err := json.Unmarshal([]byte(jsonNamespace), &ns)
 	require.NoError(t, err)
 
-	result, err := matchNamespaceSelector(ns, "fruit = apple", namespaceCache{})
+	result, err := objectsNamespaceMatchesProvidedSelector(ns, "fruit = apple", namespaceCache{})
 	assert.NoError(t, err, "it should be able to match again the fruit label in this namespace")
 	assert.Equal(t, true, result, "the match result should be true")
 }
@@ -206,7 +206,7 @@ func TestNamespaceSelectorAgainstANamespaceMatchesItsLabelsTestFail(t *testing.T
 	err := json.Unmarshal([]byte(jsonNamespace), &ns)
 	require.NoError(t, err)
 
-	result, err := matchNamespaceSelector(ns, "fruit = banana", namespaceCache{})
+	result, err := objectsNamespaceMatchesProvidedSelector(ns, "fruit = banana", namespaceCache{})
 	assert.NoError(t, err, "it should be able to match again the fruit label in this namespace")
 	assert.Equal(t, false, result, "the match result should be false")
 }
@@ -216,7 +216,7 @@ func TestNamespaceSelectorAgainstANamespaceInvalidSelector(t *testing.T) {
 	err := json.Unmarshal([]byte(jsonNamespace), &ns)
 	require.NoError(t, err)
 
-	result, err := matchNamespaceSelector(ns, "this is not a correct label selector", namespaceCache{})
+	result, err := objectsNamespaceMatchesProvidedSelector(ns, "this is not a correct label selector", namespaceCache{})
 	assert.Error(t, err, "we should get an error caused by the bad selector")
 	assert.Equal(t, false, result, "the match result should be false")
 }
@@ -224,7 +224,7 @@ func TestNamespaceSelectorAgainstANamespaceInvalidSelector(t *testing.T) {
 func TestNamespaceSelectorAgainstObjectWithoutMetadata(t *testing.T) {
 	ns := make(map[string]interface{})
 
-	result, err := matchNamespaceSelector(ns, "fruit = apple", namespaceCache{})
+	result, err := objectsNamespaceMatchesProvidedSelector(ns, "fruit = apple", namespaceCache{})
 	assert.Error(t, err, "we should get an error caused by the lack of metadata")
 	assert.Errorf(t, err, "object has no metadata", "we should get the right error message")
 	assert.Equal(t, false, result, "the match result should be false")
@@ -236,7 +236,7 @@ func TestLookupOfObjectWithoutKindIsHandled(t *testing.T) {
 	require.NoError(t, err)
 	delete(ns, "kind")
 
-	result, err := matchNamespaceSelector(ns, "fruit = apple", namespaceCache{})
+	result, err := objectsNamespaceMatchesProvidedSelector(ns, "fruit = apple", namespaceCache{})
 	assert.Error(t, err, "we should get an error caused by the lack of kind")
 	assert.Errorf(t, err, "this object seems to have no kind", "we should get the right error message")
 	assert.Equal(t, false, result, "the match result should be false")
@@ -286,7 +286,7 @@ func TestAClusterScopedObjectCanNotMatchANamespaceSelector(t *testing.T) {
 	err := json.Unmarshal([]byte(jsonClusterRole), &role)
 	require.NoError(t, err)
 
-	result, err := matchNamespaceSelector(role, "fruit = apple", namespaceCache{})
+	result, err := objectsNamespaceMatchesProvidedSelector(role, "fruit = apple", namespaceCache{})
 	assert.NoError(t, err, "we should not get an error when evaluating a cluster scoped object against a namespace selector")
 	assert.Equal(t, false, result, "the match result should be false, the object is not namespaced or a namespace so shouldn't match")
 }
@@ -300,7 +300,7 @@ func TestNamespaceSelectorAgainstAnObjectsNamespaceMatch(t *testing.T) {
 	mycache := defaultTestNamespaceCache(t)
 
 	// finally check our deploy - which will invoke the looking up of its namespace
-	result, err := matchNamespaceSelector(deploy, "fruit=apple", mycache)
+	result, err := objectsNamespaceMatchesProvidedSelector(deploy, "fruit=apple", mycache)
 	assert.NoError(t, err, "we should not get an error")
 	assert.Equal(t, true, result, "the match result should be true because the namespace test-namespace does match the selector")
 }
@@ -314,7 +314,7 @@ func TestNamespaceSelectorAgainstAnObjectsMiss(t *testing.T) {
 	mycache := defaultTestNamespaceCache(t)
 
 	// finally check our deploy - which will invoke the looking up of its namespace
-	result, err := matchNamespaceSelector(deploy, "fruit=elvis", mycache)
+	result, err := objectsNamespaceMatchesProvidedSelector(deploy, "fruit=elvis", mycache)
 	assert.NoError(t, err, "we should not get an error")
 	assert.Equal(t, false, result, "should be false, elvis does not match apple")
 }

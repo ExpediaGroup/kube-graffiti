@@ -8,12 +8,12 @@ import (
 	"stash.hcom/run/kube-graffiti/pkg/log"
 )
 
-// matchNamespaceSelector decides whether the object/object's namespace matches the namespace selector provided.
+// objectsNamespaceMatchesProvidedSelector decides whether the object/object's namespace matches the namespace selector provided.
 // If the object is a namespace then it uses its own labels, otherwise the namespace is looked up and used.
 // Cluster scoped objects can not match a namespace selector.
 // Namespaces without labels can match a namespace selector with a negative match expression.
-func matchNamespaceSelector(obj map[string]interface{}, selector string, nsc namespaceCache) (bool, error) {
-	mylog := log.ComponentLogger(componentName, "matchNamespaceSelector")
+func objectsNamespaceMatchesProvidedSelector(obj map[string]interface{}, selector string, nsc namespaceCache) (bool, error) {
+	mylog := log.ComponentLogger(componentName, "objectsNamespaceMatchesProvidedSelector")
 	mlog := mylog.With().Str("selector", selector).Logger()
 	var labels map[string]string
 

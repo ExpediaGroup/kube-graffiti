@@ -388,11 +388,11 @@ additions:
 	// set the package to use the mocked client
 	dynamicClient = &dc
 
-	// finally, call the checkObject method - the one we're testing...
-	result := checkObject(&rule, "v1", "namespaces", resourceObject)
+	// finally, call the applyToObject method - the one we're testing...
+	result := applyToObject(&rule, "v1", "namespaces", resourceObject)
 	nri.AssertExpectations(t)
 	dc.AssertExpectations(t)
-	assert.Equal(t, true, result, "checkObject should have patched the object")
+	assert.Equal(t, true, result, "applyToObject should have patched the object")
 }
 
 func TestCheckRuleDoesNotMatchObject(t *testing.T) {
@@ -447,9 +447,9 @@ additions:
 	err = json.Unmarshal([]byte(resourceJSON), &resourceObject.Object)
 	require.NoError(t, err, "json unmarshalling of namespace resource should not fail")
 
-	// finally, call the checkObject method - the one we're testing...
-	result := checkObject(&rule, "v1", "namespaces", resourceObject)
-	assert.Equal(t, false, result, "checkObject should not have patched the object")
+	// finally, call the applyToObject method - the one we're testing...
+	result := applyToObject(&rule, "v1", "namespaces", resourceObject)
+	assert.Equal(t, false, result, "applyToObject should not have patched the object")
 }
 
 func TestCheckRulePatchesNamespacedObjectOk(t *testing.T) {
@@ -580,9 +580,9 @@ additions:
 	// set the package to use the mocked client
 	dynamicClient = &dc
 
-	// finally, call the checkObject method - the one we're testing...
-	result := checkObject(&rule, "apps/v1", "deployments", resourceObject)
-	assert.Equal(t, true, result, "checkObject should have patched the object")
+	// finally, call the applyToObject method - the one we're testing...
+	result := applyToObject(&rule, "apps/v1", "deployments", resourceObject)
+	assert.Equal(t, true, result, "applyToObject should have patched the object")
 
 	dc.AssertExpectations(t)
 	nri.AssertExpectations(t)
@@ -721,9 +721,9 @@ additions:
 	// use the helper function in namespace_cache_test.go to set up the package level namespace cache
 	nsCache = defaultTestNamespaceCache(t)
 
-	// finally, call the checkObject method - the one we're testing...
-	result := checkObject(&rule, "apps/v1", "deployments", resourceObject)
-	assert.Equal(t, true, result, "checkObject should have patched the object")
+	// finally, call the applyToObject method - the one we're testing...
+	result := applyToObject(&rule, "apps/v1", "deployments", resourceObject)
+	assert.Equal(t, true, result, "applyToObject should have patched the object")
 
 	dc.AssertExpectations(t)
 	nri.AssertExpectations(t)
@@ -850,9 +850,9 @@ additions:
 	// use the helper function in namespace_cache_test.go to set up the package level namespace cache
 	nsCache = defaultTestNamespaceCache(t)
 
-	// finally, call the checkObject method - the one we're testing...
-	result := checkObject(&rule, "apps/v1", "deployments", resourceObject)
-	assert.Equal(t, false, result, "checkObject should not have patched the object")
+	// finally, call the applyToObject method - the one we're testing...
+	result := applyToObject(&rule, "apps/v1", "deployments", resourceObject)
+	assert.Equal(t, false, result, "applyToObject should not have patched the object")
 }
 
 var unstructuredNamespaceListJSON = `{
@@ -1024,7 +1024,7 @@ func TestTraverseKubePatchingAllNamespaces(t *testing.T) {
 	// set the package to use the mocked client
 	dynamicClient = &dc
 
-	CheckRulesAgainstExistingState(rules)
+	ApplyRulesAgainstExistingObjects(rules)
 	nri.AssertExpectations(t)
 	dc.AssertExpectations(t)
 }
@@ -1199,7 +1199,7 @@ func TestTraverseKubePatchingAllNamespacesWildcardsInRegistration(t *testing.T) 
 	// set the package to use the mocked client
 	dynamicClient = &dc
 
-	CheckRulesAgainstExistingState(rules)
+	ApplyRulesAgainstExistingObjects(rules)
 	nri.AssertExpectations(t)
 	dri.AssertExpectations(t)
 	dnri.AssertExpectations(t)

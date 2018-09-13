@@ -91,9 +91,9 @@ func discoverAPIsAndResources() error {
 	return nil
 }
 
-// CheckRulesAgainstExistingState interates over the graffiti rules and targets, checking each one.
-func CheckRulesAgainstExistingState(rules []config.Rule) {
-	mylog := log.ComponentLogger(componentName, "CheckRulesAgainstExistingState")
+// ApplyRulesAgainstExistingObjects interates over the graffiti rules and targets, apply each rule to existing kubernetes objects.
+func ApplyRulesAgainstExistingObjects(rules []config.Rule) {
+	mylog := log.ComponentLogger(componentName, "ApplyRulesAgainstExistingObjects")
 
 	// start the namespace cache reflector to populate it with values
 	stop := make(chan struct{})
@@ -101,16 +101,23 @@ func CheckRulesAgainstExistingState(rules []config.Rule) {
 	nsCache.StartNamespaceReflector(stop)
 	mylog.Info().Msg("checking existing objects against graffiti rules")
 	for _, rule := range rules {
-		for _, target := range rule.Registration.Targets {
-			checkTarget(&rule, target)
-		}
+		ApplyRuleAgainstExistingObjects(rule)
 	}
 }
 
-// checkTarget starts evaluating a target by getting a list of APIGroups which are listed.
+// ApplyRuleAgainstExistingObjects checks a single graffiti rule against existing kubernetes objects
+func ApplyRuleAgainstExistingObjects(rule config.Rule) {
+	mylog := log.ComponentLogger(componentName, "ApplyRuleAgainstExistingObjects")
+	mylog.Info().Str("rule", rule.Registration.Name).Msg("applying rule to existing objects")
+	for _, target := range rule.Registration.Targets {
+		applyToTargetttedAPIGroupsAndVersions(&rule, target)
+	}
+}
+
+// applyToTargetttedAPIGroupsAndVersions starts evaluating a target by getting a list of APIGroups which are listed.
 // If the target APIGroups is ["*"] then we will check through *all* discoverd apigroups.
-func checkTarget(rule *config.Rule, target webhook.Target) {
-	mylog := log.ComponentLogger(componentName, "checkTarget")
+func applyToTargetttedAPIGroupsAndVersions(rule *config.Rule, target webhook.Target) {
+	mylog := log.ComponentLogger(componentName, "applyToTargetttedAPIGroupsAndVersions")
 	rlog := mylog.With().Str("rule", rule.Registration.Name).Str("target-apigroups", strings.Join(target.APIGroups, ",")).Str("target-versions", strings.Join(target.APIVersions, ",")).Str("target-resources", strings.Join(target.Resources, ",")).Logger()
 	rlog.Info().Msg("evaluating target")
 
@@ -129,7 +136,7 @@ func checkTarget(rule *config.Rule, target webhook.Target) {
 	// check each group/version is targetted and check
 	for _, g := range targetGroups {
 		if isTargetted(discoveredAPIGroups[g].PreferredVersion.Version, target.APIVersions) {
-			checkGroupVersion(rule, target, discoveredAPIGroups[g].PreferredVersion)
+			applyToAllResourcesInAGroupVersion(rule, target, discoveredAPIGroups[g].PreferredVersion)
 		} else {
 			rlog.Warn().Str("group", g).Str("preffered-version", discoveredAPIGroups[g].PreferredVersion.Version).Msg("targetted APIVersions do not match either wildcard or the preferred api version - therefore we will not use this rule to update existing objects for this group")
 		}
@@ -146,18 +153,18 @@ func isTargetted(element string, targets []string) bool {
 	return false
 }
 
-// checkGroupVersion checks all the resources in an group/version that are targetted.
+// applyToAllResourcesInAGroupVersion checks all the resources in an group/version that are targetted.
 // If the target is ["*"] then all resources are checked, otherwise each discovered resource is
 // checked against the target list.
-func checkGroupVersion(rule *config.Rule, target webhook.Target, gv metav1.GroupVersionForDiscovery) {
-	mylog := log.ComponentLogger(componentName, "checkGroupVersion")
+func applyToAllResourcesInAGroupVersion(rule *config.Rule, target webhook.Target, gv metav1.GroupVersionForDiscovery) {
+	mylog := log.ComponentLogger(componentName, "applyToAllResourcesInAGroupVersion")
 	rlog := mylog.With().Str("rule", rule.Registration.Name).Str("group-version", gv.GroupVersion).Str("version", gv.Version).Logger()
 	rlog.Debug().Msg("evaluating group version")
 
 	if len(target.Resources) == 1 && (target.Resources[0] == "*" || target.Resources[0] == "*/*") {
 		rlog.Debug().Msg("found target with Resources * wildcard")
 		for _, r := range discoveredResources[gv.GroupVersion] {
-			checkResourceType(rule, gv.GroupVersion, r)
+			applyToAllResourcesOfType(rule, gv.GroupVersion, r)
 		}
 		return
 	}
@@ -179,7 +186,7 @@ func checkGroupVersion(rule *config.Rule, target webhook.Target, gv metav1.Group
 		rlog.Debug().Str("resource", resource.Name).Msg("calling isTargetted on resource")
 		if isTargetted(resource.Name, resourceTargets) {
 			rlog.Debug().Str("resource", resource.Name).Msg("resorce is targetted")
-			checkResourceType(rule, gv.GroupVersion, resource)
+			applyToAllResourcesOfType(rule, gv.GroupVersion, resource)
 		} else {
 			rlog.Debug().Str("resource", resource.Name).Msg("resource is not targetted")
 		}
@@ -202,11 +209,11 @@ func splitGroupVersionString(s string) (group, version string) {
 	return "", parts[0]
 }
 
-// checkResourceType checks all of the resources of particular group/version type.
+// applyToAllResourcesOfType checks all of the resources of particular group/version type.
 // It lists the resources in batches of itemLimit in order to preserve memory when there are
 // many kubernetes objects of the type in the cluster.
-func checkResourceType(rule *config.Rule, gv string, resource metav1.APIResource) {
-	mylog := log.ComponentLogger(componentName, "checkResourceType")
+func applyToAllResourcesOfType(rule *config.Rule, gv string, resource metav1.APIResource) {
+	mylog := log.ComponentLogger(componentName, "applyToAllResourcesOfType")
 	rlog := mylog.With().Str("rule", rule.Registration.Name).Str("group-version", gv).Str("resource", resource.Name).Logger()
 	rlog.Info().Msg("looking at resources of type")
 
@@ -231,7 +238,7 @@ func checkResourceType(rule *config.Rule, gv string, resource metav1.APIResource
 	}
 	rlog.Debug().Int("number-resources", len(list.Items)).Msg("processing batch of resources")
 	for _, item := range list.Items {
-		_ = checkObject(rule, gv, resource.Name, item)
+		_ = applyToObject(rule, gv, resource.Name, item)
 	}
 
 	// if we only got a partial list we need to continue until we have seen them all
@@ -248,16 +255,16 @@ func checkResourceType(rule *config.Rule, gv string, resource metav1.APIResource
 		}
 		rlog.Debug().Int("number-resources", len(list.Items)).Msg("processing batch of resources")
 		for _, item := range list.Items {
-			checkObject(rule, gv, resource.Name, item)
+			applyToObject(rule, gv, resource.Name, item)
 		}
 		meta = list.Object["metadata"].(map[string]interface{})
 		cont, ok = meta["continue"]
 	}
 }
 
-// checkObject takes a single kubernete object and decides whether to graffiti it or not.
-func checkObject(rule *config.Rule, gv, resource string, object unstructured.Unstructured) (patched bool) {
-	mylog := log.ComponentLogger(componentName, "checkObject")
+// applyToObject takes a single kubernete object and decides whether to graffiti it or not.
+func applyToObject(rule *config.Rule, gv, resource string, object unstructured.Unstructured) (patched bool) {
+	mylog := log.ComponentLogger(componentName, "applyToObject")
 	kind := object.GetKind()
 	name := object.GetName()
 	namespace := object.GetNamespace()
@@ -266,7 +273,7 @@ func checkObject(rule *config.Rule, gv, resource string, object unstructured.Uns
 
 	// match against optional rule namespace selector
 	if rule.Registration.NamespaceSelector != "" {
-		match, err := matchNamespaceSelector(object.Object, rule.Registration.NamespaceSelector, nsCache)
+		match, err := objectsNamespaceMatchesProvidedSelector(object.Object, rule.Registration.NamespaceSelector, nsCache)
 		if err != nil {
 			rlog.Error().Err(err).Msg("error checking object against namespace selector")
 		}
