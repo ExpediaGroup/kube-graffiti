@@ -2,9 +2,15 @@ package graffiti
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 
+	jsonpatch "github.com/cameront/go-jsonpatch"
+	"github.com/davecgh/go-spew/spew"
 	"github.com/rs/zerolog"
+	apivalidation "k8s.io/apimachinery/pkg/api/validation"
+	utilvalidation "k8s.io/apimachinery/pkg/util/validation"
+	"k8s.io/apimachinery/pkg/util/validation/field"
 	"stash.hcom/run/kube-graffiti/pkg/log"
 )
 
@@ -108,4 +114,119 @@ func (p Payload) processMetadataAdditionsDeletions(obj metaObject, fm map[string
 		return "", nil
 	}
 	return `[ ` + strings.Join(patches, ", ") + ` ]`, nil
+}
+
+// Validate can be used by clients of payload to validate that its syntax and contents are correct.
+func (p Payload) Validate() error {
+	var payloadTypes = 0
+	var hasJSONPatch bool
+	var hasAdditionsDeletions bool
+
+	if p.Block {
+		payloadTypes++
+	}
+	if p.JSONPatch != "" {
+		hasJSONPatch = true
+		payloadTypes++
+	}
+	if len(p.Additions.Labels) != 0 || len(p.Additions.Annotations) != 0 || len(p.Deletions.Labels) != 0 || len(p.Deletions.Annotations) != 0 {
+		hasAdditionsDeletions = true
+		payloadTypes++
+	}
+	if payloadTypes == 0 {
+		return fmt.Errorf("a rule payload must specify either additions/deletions, a json-patch, or a block")
+	}
+	if payloadTypes > 1 {
+		return fmt.Errorf("a rule payload can only specify additions/deletions, or a json-patch or a block, but not a combination of them")
+	}
+
+	if hasJSONPatch {
+		return validateJSONPatch(p.JSONPatch)
+	}
+	if hasAdditionsDeletions {
+		return validateAdditionsDeletions(p.Additions, p.Deletions)
+	}
+
+	return nil
+}
+
+// validateJSONPatch uses the jsonpatch go package to parse the user supplied patch
+// and return an error if the patch syntax is invalid.
+func validateJSONPatch(p string) error {
+	fmt.Printf("validating json patch: %s\n", p)
+	if res, err := jsonpatch.FromString(p); err != nil {
+		spew.Dump(res)
+		return fmt.Errorf("invalid json-patch: %v", err)
+	} else {
+		spew.Dump(res)
+	}
+	return nil
+}
+
+// validateAdditionsDeletions validates all additions and deletions fields are valid if they are specified.
+func validateAdditionsDeletions(add Additions, del Deletions) (err error) {
+	if len(add.Labels) > 0 {
+		if err = validateAdditionsLabels(add.Labels); err != nil {
+			return err
+		}
+	}
+	if len(add.Annotations) > 0 {
+		if err = validateAdditionsAnnotations(add.Annotations); err != nil {
+			return err
+		}
+	}
+	if len(del.Labels) > 0 {
+		if err = validateDeletionsKeys(del.Labels); err != nil {
+			return err
+		}
+	}
+	if len(del.Annotations) > 0 {
+		if err = validateDeletionsKeys(del.Annotations); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// validateAdditionsLabels knows how validate kubernetes labels
+func validateAdditionsLabels(labels map[string]string) error {
+	// validate all additions labels using kubernetes validation methods
+	templateRegex := regexp.MustCompile(`\{\{.*\}\}`)
+	for k, v := range labels {
+		if errorList := utilvalidation.IsQualifiedName(k); len(errorList) != 0 {
+			return fmt.Errorf("invalid additions: invalid label key \"%s\": %s", k, strings.Join(errorList, "; "))
+		}
+		if templateRegex.MatchString(v) {
+			continue
+		} else {
+			if errorList := utilvalidation.IsValidLabelValue(v); len(errorList) != 0 {
+				return fmt.Errorf("invalid additions: invalid label value \"%s\": %s", v, strings.Join(errorList, "; "))
+			}
+		}
+	}
+	return nil
+}
+
+// validateAdditionsAnnotations knows how validate kubernetes annotations
+func validateAdditionsAnnotations(annotations map[string]string) error {
+	// validate all additions annotations by using kubernetes validation methods
+	path := field.NewPath("metadata.annotations")
+	if errorList := apivalidation.ValidateAnnotations(annotations, path); len(errorList) != 0 {
+		var info []string
+		for _, errorPart := range errorList.ToAggregate().Errors() {
+			info = append(info, errorPart.Error())
+		}
+		return fmt.Errorf("invalid additions: invalid annotations: %s", strings.Join(info, "; "))
+	}
+	return nil
+}
+
+// validateDeletionsKeys checks that either label or annotation keys are valid QualifiedDomainNames
+func validateDeletionsKeys(labels []string) error {
+	for _, v := range labels {
+		if errorList := utilvalidation.IsQualifiedName(v); len(errorList) != 0 {
+			return fmt.Errorf("invalid deletions: invalid key: %s", strings.Join(errorList, "; "))
+		}
+	}
+	return nil
 }

@@ -454,7 +454,7 @@ rules:
 	config, err := unmarshalFromViperStrict()
 	require.NoError(t, err, "errors are caught during validation not unmarshalling")
 	err = config.ValidateConfig()
-	assert.EqualError(t, err, "rule my-rule contains invalid label key: a qualified name must consist of alphanumeric characters, '-', '_' or '.', and must start and end with an alphanumeric character (e.g. 'MyName',  or 'my.name',  or '123-abc', regex used for validation is '([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9]') with an optional DNS subdomain prefix and '/' (e.g. 'example.com/MyName')")
+	assert.EqualError(t, err, "rule my-rule is invalid - contains invalid payload: invalid additions: invalid label key \"dave.com/multiple/slashes\": a qualified name must consist of alphanumeric characters, '-', '_' or '.', and must start and end with an alphanumeric character (e.g. 'MyName',  or 'my.name',  or '123-abc', regex used for validation is '([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9]') with an optional DNS subdomain prefix and '/' (e.g. 'example.com/MyName')")
 }
 
 func TestInvalidLongAdditionalLabelKey(t *testing.T) {
@@ -481,7 +481,7 @@ rules:
 	config, err := unmarshalFromViperStrict()
 	require.NoError(t, err, "errors are caught during validation not unmarshalling")
 	err = config.ValidateConfig()
-	assert.EqualError(t, err, "rule my-rule contains invalid label key: name part must be no more than 63 characters")
+	assert.EqualError(t, err, "rule my-rule is invalid - contains invalid payload: invalid additions: invalid label key \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\": name part must be no more than 63 characters")
 }
 
 func TestInvalidAdditionalLabelValue(t *testing.T) {
@@ -508,7 +508,7 @@ rules:
 	config, err := unmarshalFromViperStrict()
 	require.NoError(t, err, "errors are caught during validation not unmarshalling")
 	err = config.ValidateConfig()
-	assert.EqualError(t, err, "rule my-rule contains invalid label value: a valid label must be an empty string or consist of alphanumeric characters, '-', '_' or '.', and must start and end with an alphanumeric character (e.g. 'MyValue',  or 'my_value',  or '12345', regex used for validation is '(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?')")
+	assert.EqualError(t, err, "rule my-rule is invalid - contains invalid payload: invalid additions: invalid label value \"label values can't contain spaces\": a valid label must be an empty string or consist of alphanumeric characters, '-', '_' or '.', and must start and end with an alphanumeric character (e.g. 'MyValue',  or 'my_value',  or '12345', regex used for validation is '(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?')")
 }
 
 func TestInvalidLongAdditionalLabelValue(t *testing.T) {
@@ -535,7 +535,7 @@ rules:
 	config, err := unmarshalFromViperStrict()
 	require.NoError(t, err, "errors are caught during validation not unmarshalling")
 	err = config.ValidateConfig()
-	assert.EqualError(t, err, "rule my-rule contains invalid label value: must be no more than 63 characters")
+	assert.EqualError(t, err, "rule my-rule is invalid - contains invalid payload: invalid additions: invalid label value \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\": must be no more than 63 characters")
 }
 
 func TestValidAdditionalAnnotation(t *testing.T) {
@@ -589,5 +589,162 @@ rules:
 	config, err := unmarshalFromViperStrict()
 	require.NoError(t, err, "errors are caught during validation not unmarshalling")
 	err = config.ValidateConfig()
-	assert.EqualError(t, err, "rule my-rule contains invalid annotations: metadata.annotations: Invalid value: \"dave.com/multiple/slashes\": a qualified name must consist of alphanumeric characters, '-', '_' or '.', and must start and end with an alphanumeric character (e.g. 'MyName',  or 'my.name',  or '123-abc', regex used for validation is '([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9]') with an optional DNS subdomain prefix and '/' (e.g. 'example.com/MyName')")
+	assert.EqualError(t, err, "rule my-rule is invalid - contains invalid payload: invalid additions: invalid annotations: metadata.annotations: Invalid value: \"dave.com/multiple/slashes\": a qualified name must consist of alphanumeric characters, '-', '_' or '.', and must start and end with an alphanumeric character (e.g. 'MyName',  or 'my.name',  or '123-abc', regex used for validation is '([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9]') with an optional DNS subdomain prefix and '/' (e.g. 'example.com/MyName')")
+}
+
+func TestValidBlockRule(t *testing.T) {
+	var source = `---
+server:
+  namespace: test
+  service: test
+rules:
+- registration:
+    name: my-rule
+  payload:
+    block: true
+`
+	// read viper config from our test config file
+	setDefaults()
+	viper.Set("log-level", "debug")
+	viper.SetConfigType("yaml")
+	err := viper.ReadConfig(bytes.NewBuffer([]byte(source)))
+	require.NoError(t, err, "there shouldn't be a failure loading the configuration")
+
+	// check that config validates ok
+	config, err := unmarshalFromViperStrict()
+	require.NoError(t, err, "errors are caught during validation not unmarshalling")
+	err = config.ValidateConfig()
+	assert.NoError(t, err, "a payload of just block should be valid")
+}
+
+func TestValidJSONPatch(t *testing.T) {
+	var source = `---
+server:
+  namespace: test
+  service: test
+rules:
+- registration:
+    name: my-rule
+  payload:
+    json-patch: "[ { \"op\": \"delete\", \"path\": \"/metadata/labels\" } ]"
+`
+	// read viper config from our test config file
+	setDefaults()
+	viper.Set("log-level", "debug")
+	viper.SetConfigType("yaml")
+	err := viper.ReadConfig(bytes.NewBuffer([]byte(source)))
+	require.NoError(t, err, "there shouldn't be a failure loading the configuration")
+
+	// check that config validates ok
+	config, err := unmarshalFromViperStrict()
+	require.NoError(t, err, "errors are caught during validation not unmarshalling")
+	err = config.ValidateConfig()
+	assert.NoError(t, err, "a payload with a single valid-json patch should be valid")
+}
+
+func TestInValidJSONPatch(t *testing.T) {
+	var source = `---
+server:
+  namespace: test
+  service: test
+rules:
+- registration:
+    name: my-rule
+  payload:
+    json-patch: "[ { something that isn't valid json } ]"
+`
+	// read viper config from our test config file
+	setDefaults()
+	viper.Set("log-level", "debug")
+	viper.SetConfigType("yaml")
+	err := viper.ReadConfig(bytes.NewBuffer([]byte(source)))
+	require.NoError(t, err, "there shouldn't be a failure loading the configuration")
+
+	// check that config validates ok
+	config, err := unmarshalFromViperStrict()
+	require.NoError(t, err, "errors are caught during validation not unmarshalling")
+	err = config.ValidateConfig()
+	assert.EqualError(t, err, "rule my-rule is invalid - contains invalid payload: invalid json-patch: invalid character 's' looking for beginning of object key string", "a payload with a single invalid json patch should fail")
+}
+
+func TestBlockPlusJSONPatchNotAllowed(t *testing.T) {
+	var source = `---
+server:
+  namespace: test
+  service: test
+rules:
+- registration:
+    name: my-rule
+  payload:
+    block: true
+    json-patch: "[ { \"op\": \"delete\", \"path\": \"/metadata/labels\" } ]"
+`
+	// read viper config from our test config file
+	setDefaults()
+	viper.Set("log-level", "debug")
+	viper.SetConfigType("yaml")
+	err := viper.ReadConfig(bytes.NewBuffer([]byte(source)))
+	require.NoError(t, err, "there shouldn't be a failure loading the configuration")
+
+	// check that config validates ok
+	config, err := unmarshalFromViperStrict()
+	require.NoError(t, err, "errors are caught during validation not unmarshalling")
+	err = config.ValidateConfig()
+	assert.EqualError(t, err, "rule my-rule is invalid - contains invalid payload: a rule payload can only specify additions/deletions, or a json-patch or a block, but not a combination of them", "you shouldn't be able to have combination of additions/deletions, block or json-path")
+}
+
+func TestBlockPlusAdditionsDeletionsNotAllowed(t *testing.T) {
+	var source = `---
+server:
+  namespace: test
+  service: test
+rules:
+- registration:
+    name: my-rule
+  payload:
+    block: true
+    additions:
+      labels:
+        added: label
+`
+	// read viper config from our test config file
+	setDefaults()
+	viper.Set("log-level", "debug")
+	viper.SetConfigType("yaml")
+	err := viper.ReadConfig(bytes.NewBuffer([]byte(source)))
+	require.NoError(t, err, "there shouldn't be a failure loading the configuration")
+
+	// check that config validates ok
+	config, err := unmarshalFromViperStrict()
+	require.NoError(t, err, "errors are caught during validation not unmarshalling")
+	err = config.ValidateConfig()
+	assert.EqualError(t, err, "rule my-rule is invalid - contains invalid payload: a rule payload can only specify additions/deletions, or a json-patch or a block, but not a combination of them", "you shouldn't be able to have combination of additions/deletions, block or json-path")
+}
+
+func TestJSONPatchPlusAdditionsDeletionsNotAllowed(t *testing.T) {
+	var source = `---
+server:
+  namespace: test
+  service: test
+rules:
+- registration:
+    name: my-rule
+  payload:
+    json-patch: "[ { \"op\": \"delete\", \"path\": \"/metadata/labels\" } ]"
+    additions:
+      labels:
+        added: label
+`
+	// read viper config from our test config file
+	setDefaults()
+	viper.Set("log-level", "debug")
+	viper.SetConfigType("yaml")
+	err := viper.ReadConfig(bytes.NewBuffer([]byte(source)))
+	require.NoError(t, err, "there shouldn't be a failure loading the configuration")
+
+	// check that config validates ok
+	config, err := unmarshalFromViperStrict()
+	require.NoError(t, err, "errors are caught during validation not unmarshalling")
+	err = config.ValidateConfig()
+	assert.EqualError(t, err, "rule my-rule is invalid - contains invalid payload: a rule payload can only specify additions/deletions, or a json-patch or a block, but not a combination of them", "you shouldn't be able to have combination of additions/deletions, block or json-path")
 }
