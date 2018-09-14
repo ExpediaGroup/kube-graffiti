@@ -84,7 +84,7 @@ func runRootCmd(_ *cobra.Command, _ []string) {
 	}
 
 	mylog.Debug().Msg("getting kubernetes client")
-	kubeClient := initKubeClient()
+	kubeClient, restConfig := getKubeClients()
 	// Setup and start the health-checker
 	healthChecker := healthcheck.NewHealthChecker(healthcheck.NewCutDownNamespaceClient(kubeClient), viper.GetInt("health-checker.port"), viper.GetString("health-checker.path"))
 	healthChecker.StartHealthChecker()
@@ -94,9 +94,9 @@ func runRootCmd(_ *cobra.Command, _ []string) {
 		mylog.Fatal().Err(err).Msg("webhook server failed to start")
 	}
 
-	/*if err := initExistingNamespacesCheck(kubeClient); err != nil {
-		log.Fatal().Err(err).Msg("failed to check existing namespaces")
-	}*/
+	if err := initExistingCheck(config, restConfig); err != nil {
+		mylog.Fatal().Err(err).Msg("failed to check existing namespaces")
+	}
 
 	// wait for an interrupt
 	signalChan := make(chan os.Signal, 1)
@@ -105,22 +105,23 @@ func runRootCmd(_ *cobra.Command, _ []string) {
 	os.Exit(0)
 }
 
-// initKubeClient returns a valid kubernetes client only when running within a kubernetes pod.
-func initKubeClient() *kubernetes.Clientset {
-	mylog := log.ComponentLogger(componentName, "initKubeClient")
+// getKubeClients returns client-go clientset and a dynamic client
+func getKubeClients() (*kubernetes.Clientset, *rest.Config) {
+	mylog := log.ComponentLogger(componentName, "getKubeClients")
 	// creates the in-cluster config
 	mylog.Info().Msg("creating kubeconfig")
 	config, err := rest.InClusterConfig()
 	if err != nil {
 		panic(err.Error())
 	}
+
 	// creates the clientset
 	mylog.Debug().Msg("creating kubernetes api clientset")
-	clientset, err := kubernetes.NewForConfig(config)
+	client, err := kubernetes.NewForConfig(config)
 	if err != nil {
 		panic(err.Error())
 	}
-	return clientset
+	return client, config
 }
 
 func initWebhookServer(c *config.Configuration, k *kubernetes.Clientset) error {
@@ -173,17 +174,19 @@ func initWebhookServer(c *config.Configuration, k *kubernetes.Clientset) error {
 	return nil
 }
 
-func initExistingCheck(k *kubernetes.Clientset) error {
+func initExistingCheck(config *config.Configuration, r *rest.Config) error {
 	mylog := log.ComponentLogger(componentName, "initExistingCheck")
 
 	var err error
-	if viper.GetBool("check-existing") {
+	if !viper.IsSet("check-existing") || viper.GetString("check-existing") != "true" {
 		mylog.Info().Msg("checking of existing objects is disabled")
 		return nil
 	}
-	if err = existing.CheckExistingObjects(k); err != nil {
+	if err = existing.InitKubeClients(r); err != nil {
 		return err
 	}
+	existing.ApplyRulesAgainstExistingObjects(config.Rules)
+
 	mylog.Info().Msg("check of existing objects completed successfully")
 
 	return nil

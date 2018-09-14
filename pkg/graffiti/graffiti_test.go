@@ -99,7 +99,7 @@ func TestReviewObjectDoesNotHaveMetaData(t *testing.T) {
 	err := json.Unmarshal([]byte(missingMetaData), &review)
 	require.NoError(t, err, "couldn't marshall a valid admission review object from test json")
 
-	resp := rule.Mutate(review.Request)
+	resp := rule.MutateAdmission(review.Request)
 	assert.NotNil(t, resp)
 	assert.Equal(t, true, resp.Allowed, "failed rules should not block the source api request")
 	assert.Nil(t, resp.Patch, "there shouldn't be patch")
@@ -118,11 +118,16 @@ func TestNoSelectorsMeansMatchEverything(t *testing.T) {
 	require.NoError(t, err, "couldn't marshall a valid admission review object from test json")
 
 	// call Mutate
-	resp := rule.Mutate(review.Request)
+	resp := rule.MutateAdmission(review.Request)
 
 	assert.Equal(t, true, resp.Allowed, "failed rules should not block the source api request")
 	assert.NotNil(t, resp.Patch)
-	assert.Equal(t, `[{"op":"add","path":"/metadata/labels/modified-by-graffiti","value":"abc123"}]`, string(resp.Patch), "an absence of selectors is taken to mean always match")
+
+	// we have to test the patch objects because they have multiple values and can be ordered either way round preventing a simple string match.
+	desired, _ := jsonpatch.FromString(`[ { "op": "replace", "path": "/metadata/labels", "value": { "author": "david", "group": "runtime", "modified-by-graffiti": "abc123" }} ]`)
+	actual, err := jsonpatch.FromString(string(resp.Patch))
+	assert.NoError(t, err)
+	assert.EqualValues(t, desired.Operations, actual.Operations)
 }
 
 func TestWithoutMatchingLabelSelector(t *testing.T) {
@@ -137,7 +142,7 @@ func TestWithoutMatchingLabelSelector(t *testing.T) {
 	assert.NoError(t, err, "couldn't marshall a valid admission review object from test json")
 
 	// call Mutate
-	resp := rule.Mutate(review.Request)
+	resp := rule.MutateAdmission(review.Request)
 	assert.Equal(t, true, resp.Allowed, "failed rules should not block the source api request")
 	assert.Nil(t, resp.Patch)
 }
@@ -158,10 +163,15 @@ func TestMatchingLabelSelector(t *testing.T) {
 	assert.NoError(t, err, "couldn't marshall a valid admission review object from test json")
 
 	// call Mutate
-	resp := rule.Mutate(review.Request)
+	resp := rule.MutateAdmission(review.Request)
 	assert.Equal(t, true, resp.Allowed, "the request should be successful")
 	assert.NotNil(t, resp.Patch)
-	assert.Equal(t, `[{"op":"add","path":"/metadata/labels/modified-by-graffiti","value":"abc123"}]`, string(resp.Patch))
+
+	// we have to test the patch objects because they have multiple values and can be ordered either way round preventing a simple string match.
+	desired, _ := jsonpatch.FromString(`[ { "op": "replace", "path": "/metadata/labels", "value": { "author": "david", "group": "runtime", "modified-by-graffiti": "abc123" }} ]`)
+	actual, err := jsonpatch.FromString(string(resp.Patch))
+	assert.NoError(t, err)
+	assert.EqualValues(t, desired.Operations, actual.Operations)
 }
 
 func TestInvalidLabelSelector(t *testing.T) {
@@ -177,7 +187,7 @@ func TestInvalidLabelSelector(t *testing.T) {
 	require.NoError(t, err, "couldn't marshall a valid admission review object from test json")
 
 	// call Mutate
-	resp := rule.Mutate(review.Request)
+	resp := rule.MutateAdmission(review.Request)
 	assert.Equal(t, true, resp.Allowed, "the request should be successful")
 	assert.Nil(t, resp.Patch, "nothing is patched")
 }
@@ -192,7 +202,7 @@ func TestMatchingSelectorWithoutLablesOrAnnotationsProducesNoPatch(t *testing.T)
 	assert.NoError(t, err, "couldn't marshall a valid admission review object from test json")
 
 	// call Mutate
-	resp := rule.Mutate(review.Request)
+	resp := rule.MutateAdmission(review.Request)
 	assert.Equal(t, true, resp.Allowed, "the request should be successful")
 	assert.Nil(t, resp.Patch)
 }
@@ -210,7 +220,7 @@ func TestLabelSelectorMatchesName(t *testing.T) {
 	require.NoError(t, err, "couldn't marshall a valid admission review object from test json")
 
 	// call Mutate
-	resp := rule.Mutate(review.Request)
+	resp := rule.MutateAdmission(review.Request)
 	assert.Equal(t, true, resp.Allowed, "the request should be successful")
 	assert.NotNil(t, resp.Patch)
 
@@ -234,7 +244,7 @@ func TestMultipleLabelSelectorsAreORed(t *testing.T) {
 	require.NoError(t, err, "couldn't marshall a valid admission review object from test json")
 
 	// call Mutate
-	resp := rule.Mutate(review.Request)
+	resp := rule.MutateAdmission(review.Request)
 	assert.Equal(t, true, resp.Allowed, "the request should be successful")
 	assert.NotNil(t, resp.Patch)
 
@@ -297,7 +307,7 @@ func TestHandlesNoSourceObjectLabels(t *testing.T) {
 	require.NoError(t, err, "couldn't marshall a valid admission review object from test json")
 
 	// call Mutate
-	resp := rule.Mutate(review.Request)
+	resp := rule.MutateAdmission(review.Request)
 	assert.Equal(t, true, resp.Allowed, "the request should be successful")
 	assert.NotNil(t, resp.Patch)
 	assert.Equal(t, `[ { "op": "add", "path": "/metadata/labels", "value": { "modified-by-graffiti": "abc123" }} ]`, string(resp.Patch))
@@ -321,7 +331,7 @@ func TestSimpleFieldSelectorMiss(t *testing.T) {
 	assert.NoError(t, err, "couldn't marshall a valid admission review object from test json")
 
 	// call Mutate
-	resp := rule.Mutate(review.Request)
+	resp := rule.MutateAdmission(review.Request)
 	assert.Equal(t, true, resp.Allowed, "the request should be successful")
 	assert.Nil(t, resp.Patch)
 }
@@ -342,7 +352,7 @@ func TestMatchingSimpleFieldSelectorHit(t *testing.T) {
 	assert.NoError(t, err, "couldn't marshall a valid admission review object from test json")
 
 	// call Mutate
-	resp := rule.Mutate(review.Request)
+	resp := rule.MutateAdmission(review.Request)
 	assert.Equal(t, true, resp.Allowed, "the request should be successful")
 	assert.NotNil(t, resp.Patch)
 
@@ -369,7 +379,7 @@ func TestMatchingNegativeSimpleFieldSelector(t *testing.T) {
 	assert.NoError(t, err, "couldn't marshall a valid admission review object from test json")
 
 	// call Mutate
-	resp := rule.Mutate(review.Request)
+	resp := rule.MutateAdmission(review.Request)
 	assert.Equal(t, true, resp.Allowed, "the request should be successful")
 	assert.NotNil(t, resp.Patch)
 
@@ -396,7 +406,7 @@ func TestSuccessfullCombinedFieldSelector(t *testing.T) {
 	assert.NoError(t, err, "couldn't marshall a valid admission review object from test json")
 
 	// call Mutate
-	resp := rule.Mutate(review.Request)
+	resp := rule.MutateAdmission(review.Request)
 	assert.Equal(t, true, resp.Allowed, "the request should be successful")
 	assert.NotNil(t, resp.Patch)
 
@@ -423,7 +433,7 @@ func TestCombinedFieldSelectorShouldANDTheCommaSeparatedSelectors(t *testing.T) 
 	assert.NoError(t, err, "couldn't marshall a valid admission review object from test json")
 
 	// call Mutate
-	resp := rule.Mutate(review.Request)
+	resp := rule.MutateAdmission(review.Request)
 	assert.Equal(t, true, resp.Allowed, "the request should be successful")
 	assert.Nil(t, resp.Patch)
 }
@@ -441,7 +451,7 @@ func TestInvalidFieldSelector(t *testing.T) {
 	require.NoError(t, err, "couldn't marshall a valid admission review object from test json")
 
 	// call Mutate
-	resp := rule.Mutate(review.Request)
+	resp := rule.MutateAdmission(review.Request)
 	assert.Equal(t, true, resp.Allowed, "the request should be successful")
 	assert.Nil(t, resp.Patch, "nothing is patched")
 }
@@ -462,7 +472,7 @@ func TestORMultipleFieldSelectors(t *testing.T) {
 	assert.NoError(t, err, "couldn't marshall a valid admission review object from test json")
 
 	// call Mutate
-	resp := rule.Mutate(review.Request)
+	resp := rule.MutateAdmission(review.Request)
 	assert.Equal(t, true, resp.Allowed, "the request should be successful")
 	assert.NotNil(t, resp.Patch)
 
@@ -489,7 +499,7 @@ func TestMatchingComplexFieldSelectorHit(t *testing.T) {
 	assert.NoError(t, err, "couldn't marshall a valid admission review object from test json")
 
 	// call Mutate
-	resp := rule.Mutate(review.Request)
+	resp := rule.MutateAdmission(review.Request)
 	assert.Equal(t, true, resp.Allowed, "the request should be successful")
 	assert.NotNil(t, resp.Patch)
 
@@ -519,7 +529,7 @@ func TestLabelAndFieldSelectorsANDTogetherByDefault(t *testing.T) {
 	assert.NoError(t, err, "couldn't marshall a valid admission review object from test json")
 
 	// call Mutate
-	resp := rule.Mutate(review.Request)
+	resp := rule.MutateAdmission(review.Request)
 	assert.Equal(t, true, resp.Allowed, "the request should be successful")
 	assert.Nil(t, resp.Patch)
 }
@@ -544,7 +554,7 @@ func TestLabelAndFieldSelectorsANDSpecified(t *testing.T) {
 	assert.NoError(t, err, "couldn't marshall a valid admission review object from test json")
 
 	// call Mutate
-	resp := rule.Mutate(review.Request)
+	resp := rule.MutateAdmission(review.Request)
 	assert.Equal(t, true, resp.Allowed, "the request should be successful")
 	assert.Nil(t, resp.Patch)
 }
@@ -570,7 +580,7 @@ func TestAnEmptySelectorAlwaysMatchesWithAND(t *testing.T) {
 	assert.NoError(t, err, "couldn't marshall a valid admission review object from test json")
 
 	// call Mutate
-	resp := rule.Mutate(review.Request)
+	resp := rule.MutateAdmission(review.Request)
 	assert.Equal(t, true, resp.Allowed, "the request should be successful")
 	assert.NotNil(t, resp.Patch)
 	// we have to test the patch objects because they have multiple values and can be ordered either way round preventing a simple string match.
@@ -600,7 +610,7 @@ func TestLabelAndFieldSelectorsORSelected(t *testing.T) {
 	assert.NoError(t, err, "couldn't marshall a valid admission review object from test json")
 
 	// call Mutate
-	resp := rule.Mutate(review.Request)
+	resp := rule.MutateAdmission(review.Request)
 	assert.Equal(t, true, resp.Allowed, "the request should be successful")
 	assert.NotNil(t, resp.Patch)
 	// we have to test the patch objects because they have multiple values and can be ordered either way round preventing a simple string match.
@@ -631,7 +641,7 @@ func TestAnEmptySelectorNeverMatchesWithOR(t *testing.T) {
 	assert.NoError(t, err, "couldn't marshall a valid admission review object from test json")
 
 	// call Mutate
-	resp := rule.Mutate(review.Request)
+	resp := rule.MutateAdmission(review.Request)
 	assert.Equal(t, true, resp.Allowed, "the request should be successful")
 	assert.Nil(t, resp.Patch)
 }
@@ -656,7 +666,7 @@ func TestLabelAndFieldSelectorsXORSelectedWithSingleMatch(t *testing.T) {
 	assert.NoError(t, err, "couldn't marshall a valid admission review object from test json")
 
 	// call Mutate
-	resp := rule.Mutate(review.Request)
+	resp := rule.MutateAdmission(review.Request)
 	assert.Equal(t, true, resp.Allowed, "the request should be successful")
 	assert.NotNil(t, resp.Patch)
 	// we have to test the patch objects because they have multiple values and can be ordered either way round preventing a simple string match.
@@ -686,7 +696,7 @@ func TestLabelAndFieldSelectorsXORWithBothMatchedIsFalse(t *testing.T) {
 	assert.NoError(t, err, "couldn't marshall a valid admission review object from test json")
 
 	// call Mutate
-	resp := rule.Mutate(review.Request)
+	resp := rule.MutateAdmission(review.Request)
 	assert.Equal(t, true, resp.Allowed, "the request should be successful")
 	assert.Nil(t, resp.Patch)
 }
@@ -711,7 +721,28 @@ func TestLabelAndFieldSelectorsXORanEmptySelectorIsNotAMatch(t *testing.T) {
 	assert.NoError(t, err, "couldn't marshall a valid admission review object from test json")
 
 	// call Mutate
-	resp := rule.Mutate(review.Request)
+	resp := rule.MutateAdmission(review.Request)
+	assert.Equal(t, true, resp.Allowed, "the request should be successful")
+	assert.Nil(t, resp.Patch)
+}
+
+func TestWhenAdditionsAlreadyThereProducesNoPatch(t *testing.T) {
+	// create a Rule
+	rule := Rule{Matchers: Matchers{
+		LabelSelectors: []string{"author = david"},
+	},
+		Additions: Additions{
+			Labels: map[string]string{"author": "david"},
+		},
+	}
+
+	// create a review request
+	var review = admission.AdmissionReview{}
+	err := json.Unmarshal([]byte(testReview), &review)
+	assert.NoError(t, err, "couldn't marshall a valid admission review object from test json")
+
+	// call Mutate
+	resp := rule.MutateAdmission(review.Request)
 	assert.Equal(t, true, resp.Allowed, "the request should be successful")
 	assert.Nil(t, resp.Patch)
 }

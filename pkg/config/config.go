@@ -51,9 +51,9 @@ type Server struct {
 
 // Rule models a single graffiti rule with three sections for managing registration, matching and the payload to graffiti on the object.
 type Rule struct {
-	Registration webhook.Registration `mapstructure:"registration"`
-	Matchers     graffiti.Matchers    `mapstructure:"matchers"`
-	Additions    graffiti.Additions   `mapstructure:"additions"`
+	Registration webhook.Registration `mapstructure:"registration" yaml:"registration"`
+	Matchers     graffiti.Matchers    `mapstructure:"matchers" yaml:"matchers,omitempty"`
+	Additions    graffiti.Additions   `mapstructure:"additions" yaml:"additions"`
 }
 
 // LoadConfig is reponsible for loading the viper configuration file.

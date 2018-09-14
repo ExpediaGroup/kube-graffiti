@@ -20,7 +20,7 @@ type graffitiHandler struct {
 
 // graffitiMutator interface allows us to mock out for testing.
 type graffitiMutator interface {
-	Mutate(req *admission.AdmissionRequest) *admission.AdmissionResponse
+	MutateAdmission(req *admission.AdmissionRequest) *admission.AdmissionResponse
 }
 
 func newGraffitiHandler() graffitiHandler {
@@ -90,7 +90,7 @@ func (h graffitiHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	} else {
 		reqLog.Debug().Str("path", url).Msg("found a graffiti rule for path")
 		// call the Mutate method associated with this rule
-		reviewResponse = mutator.Mutate(ar.Request)
+		reviewResponse = mutator.MutateAdmission(ar.Request)
 	}
 
 	response := admission.AdmissionReview{}

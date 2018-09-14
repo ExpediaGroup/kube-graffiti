@@ -3,6 +3,7 @@ package graffiti
 import (
 	"bytes"
 	"fmt"
+	"reflect"
 	"strings"
 	"text/template"
 )
@@ -14,32 +15,51 @@ func (r Rule) createObjectPatch(obj metaObject, fm map[string]string) (string, e
 	var patches []string
 
 	if len(r.Additions.Labels) > 0 {
-		modified, err := renderMapValues(r.Additions.Labels, fm)
+		op, err := createPatchOperand(obj.Meta.Labels, r.Additions.Labels, fm, "/metadata/labels")
 		if err != nil {
 			return "", err
 		}
-
-		if len(obj.Meta.Labels) == 0 {
-			patches = append(patches, renderStringMapAsPatch("add", "/metadata/labels", modified))
-		} else {
-			patches = append(patches, renderStringMapAsPatch("replace", "/metadata/labels", mergeMaps(obj.Meta.Labels, modified)))
+		if op != "" {
+			patches = append(patches, op)
 		}
 	}
 
 	if len(r.Additions.Annotations) > 0 {
-		modified, err := renderMapValues(r.Additions.Annotations, fm)
+		op, err := createPatchOperand(obj.Meta.Annotations, r.Additions.Annotations, fm, "/metadata/annotations")
 		if err != nil {
 			return "", err
 		}
-
-		if len(obj.Meta.Annotations) == 0 {
-			patches = append(patches, renderStringMapAsPatch("add", "/metadata/annotations", modified))
-		} else {
-			patches = append(patches, renderStringMapAsPatch("replace", "/metadata/annotations", mergeMaps(obj.Meta.Annotations, modified)))
+		if op != "" {
+			patches = append(patches, op)
 		}
 	}
 
+	if len(patches) == 0 {
+		return "", nil
+	}
 	return `[ ` + strings.Join(patches, ", ") + ` ]`, nil
+}
+
+func createPatchOperand(src, additions, fm map[string]string, path string) (string, error) {
+	if len(additions) == 0 {
+		return "", nil
+	}
+
+	rendered, err := renderMapValues(additions, fm)
+	if err != nil {
+		return "", err
+	}
+
+	modified := mergeMaps(src, rendered)
+	// don't produce a patch when there are no changes
+	if reflect.DeepEqual(src, modified) {
+		return "", nil
+	}
+
+	if len(src) == 0 {
+		return renderStringMapAsPatch("add", path, modified), nil
+	}
+	return renderStringMapAsPatch("replace", path, modified), nil
 }
 
 // renderStringMapAsPatch builds a json patch string from operand, path and a map
@@ -61,10 +81,8 @@ func escapeString(s string) string {
 func mergeMaps(sources ...map[string]string) map[string]string {
 	result := make(map[string]string)
 	for _, source := range sources {
-		if len(source) > 0 {
-			for k, v := range source {
-				result[k] = v
-			}
+		for k, v := range source {
+			result[k] = v
 		}
 	}
 

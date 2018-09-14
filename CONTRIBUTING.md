@@ -8,7 +8,7 @@ Certificate of Origin
 By contributing to this project you agree to the Developer Certificate of Origin (DCO). This document was created by the Linux Kernel community and is a simple statement that you, as a contributor, have the legal right to make the contribution. See the DCO file for details.
 Email and Chat
 
-The project currently uses the kube-graffiti GitHub Issues for collecting issues, and k8s.slack.io for chatting in rare cases. Please avoid emailing maintainers found in the MAINTAINERS file directly. They are very busy and read the GitHub issues.
+The project currently uses the kube-graffiti GitHub Issues for collecting issuess. Please avoid emailing maintainers found in the MAINTAINERS file directly. They are very busy and read the GitHub issues.
 Getting Started
 
     Fork the repository on GitHub
