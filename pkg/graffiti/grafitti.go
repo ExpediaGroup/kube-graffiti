@@ -4,6 +4,7 @@ package graffiti
 
 import (
 	//"stash.hcom/run/istio-namespace-webhook/pkg/log"
+	"bytes"
 	"encoding/json"
 	"fmt"
 
@@ -84,6 +85,18 @@ func (r Rule) MutateAdmission(req *admission.AdmissionRequest) *admission.Admiss
 			Result: &metav1.Status{
 				Message: "rule didn't match",
 			},
+		}
+	}
+
+	// handle a rule which blocks instead of patching...
+	if bytes.Equal(patch, []byte("BLOCK")) {
+		return &admission.AdmissionResponse{
+			Allowed: false,
+			Result: &metav1.Status{
+				Reason:  metav1.StatusReasonForbidden,
+				Message: fmt.Sprintf("blocked by kube-graffiti rule: %s", r.Name),
+			},
+			Patch: nil,
 		}
 	}
 

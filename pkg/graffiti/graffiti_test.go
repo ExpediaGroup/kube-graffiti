@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	admission "k8s.io/api/admission/v1beta1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 const testReview = `{
@@ -1024,4 +1025,29 @@ func TestUserProvidedPatch(t *testing.T) {
 	assert.Equal(t, true, resp.Allowed, "the request should be successful")
 	assert.NotNil(t, resp.Patch)
 	assert.Equal(t, []byte(rule.Payload.JSONPatch), resp.Patch, "the patch should be the user supplied one")
+}
+
+func TestRuleBlocksObject(t *testing.T) {
+	// create a Rule
+	rule := Rule{
+		Name: "I-dont-like-david",
+		Matchers: Matchers{
+			LabelSelectors: []string{"author = david"},
+		},
+		Payload: Payload{
+			Block: true,
+		},
+	}
+
+	// create a review request
+	var review = admission.AdmissionReview{}
+	err := json.Unmarshal([]byte(testReview), &review)
+	assert.NoError(t, err, "couldn't marshall a valid admission review object from test json")
+
+	// call Mutate
+	resp := rule.MutateAdmission(review.Request)
+	assert.Equal(t, false, resp.Allowed, "the request should not be allowed to proceed")
+	assert.Nil(t, resp.Patch, "the patch should be empty")
+	assert.Equal(t, metav1.StatusReasonForbidden, resp.Result.Reason, "the graffiti rule should forbid the create/update of the object")
+	assert.Equal(t, "blocked by kube-graffiti rule: I-dont-like-david", resp.Result.Message, "we should be able to see why the request has been blocked and by which rule")
 }
