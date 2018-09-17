@@ -435,18 +435,17 @@ Error from server (InternalError): Internal error occurred: admission webhook "n
 
 **JSON-Patch (advanced)**
 
-Want to update something in an object other than the either the labels or annotations?  You can do it by specifying your own [json patch](http://jsonpatch.com/) which can alter **any** part of the object you desire - which could be altering container images, changing secrets, environment variables, perhaps patching a deployment to add anti-affinity rules, or certain tolerations ... there's a long list of possible uses (and abuses!)  This is a low-level, powerful and rather dangerous feature so I would encourage careful testing of your rules containing json-patches in safe environment before you try them on any cluster that you care about!
+Want to update something in an object other than the labels or annotations?  You can do it by specifying your own [json patch](http://jsonpatch.com/) which can alter **any** part of the object you desire - which could be altering container images, changing secrets, environment variables, perhaps patching a deployment to add anti-affinity rules, or certain tolerations ... there's a long list of possible uses (and abuses!)  This is a low-level, powerful and rather dangerous feature so I would encourage careful testing of your rules containing json-patches in safe environment before you try them on any cluster that you care about!
 
 ```
 rules:
 - registration:
-    name: remove-all-labels
+    name: the-end-of-all-metadata
   payload:
     json-patch: "[ { \"op\": \"delete\", \"path\": \"/metadata/labels\" } ]"
-    additions:
-      labels:
-        added: label
 ```
+
+*note* - an example of an **extremely dangerous** rule!
 
 kubernetes RBAC rules
 ---------------------
