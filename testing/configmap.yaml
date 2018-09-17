@@ -75,3 +75,20 @@ data:
             security-zone: "alpha"
             contact: "mobileteam@mycorp.com"
             wiki: "http://wiki.mycorp.com/mobile-team"
+    - registration:
+        name: block-specific-deploy-in-mobile-team
+        targets:
+        - api-groups:
+          - "*"
+          api-versions:
+          - "*"
+          resources:
+          - pods
+          - deployments
+        namespace-selector: name = mobile-team
+        failure-policy: Ignore
+      matchers:
+        field-selectors:
+        - spec.template.spec.containers.0.image = nginx
+      payload:
+        block: true

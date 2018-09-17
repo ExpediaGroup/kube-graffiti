@@ -25,7 +25,7 @@ var (
 	componentName = "cmd"
 	cfgFile       string
 	rootCmd       = &cobra.Command{
-		Use:     "kube-grafitti",
+		Use:     "kube-graffiti",
 		Short:   "Automatically add labels and/or annotations to kubernetes objects",
 		Long:    `Write rules that match labels and object fields and add labels/annotations to kubernetes objects as they are created via a mutating webhook.`,
 		Example: `kube-graffiti --config ./config.yaml`,
