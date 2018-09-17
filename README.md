@@ -441,6 +441,13 @@ Want to update something in an object other than the labels or annotations?  You
 rules:
 - registration:
     name: the-end-of-all-metadata
+    targets:
+    - api-groups:
+      - "*"
+      api-versions:
+      - "*"
+      resources:
+      - "*"
   payload:
     json-patch: "[ { \"op\": \"delete\", \"path\": \"/metadata/labels\" } ]"
 ```
