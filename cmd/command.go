@@ -124,7 +124,7 @@ func getKubeClients() (*kubernetes.Clientset, *rest.Config) {
 	return client, config
 }
 
-func initWebhookServer(c *config.Configuration, k *kubernetes.Clientset) error {
+func initWebhookServer(c config.Configuration, k *kubernetes.Clientset) error {
 	mylog := log.ComponentLogger(componentName, "initWebhookServer")
 	port := viper.GetInt("server.port")
 
@@ -174,7 +174,7 @@ func initWebhookServer(c *config.Configuration, k *kubernetes.Clientset) error {
 	return nil
 }
 
-func initExistingCheck(config *config.Configuration, r *rest.Config) error {
+func initExistingCheck(config config.Configuration, r *rest.Config) error {
 	mylog := log.ComponentLogger(componentName, "initExistingCheck")
 
 	var err error

@@ -58,6 +58,13 @@ const testReview = `{
 	}
  }`
 
+func TestAddMetadata(t *testing.T) {
+	var a map[string]interface{}
+
+	addMetadata(a, "b", "c")
+	addMetadata(a, "x", "y")
+}
+
 func TestReviewObjectDoesNotHaveMetaData(t *testing.T) {
 	rule := Rule{Matchers: Matchers{LabelSelectors: []string{"author = stephen"}}}
 

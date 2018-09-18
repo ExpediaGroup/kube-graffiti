@@ -113,6 +113,9 @@ func (r Rule) MutateAdmission(req *admission.AdmissionRequest) *admission.Admiss
 
 // addMetadata adds/sets a metadata item, creating new metadata map if required.
 func addMetadata(obj map[string]interface{}, k, v string) {
+	if obj == nil {
+		return
+	}
 	if _, ok := obj["metadata"]; ok {
 		if meta, ok := obj["metadata"].(map[string]interface{}); ok {
 			meta[k] = v

@@ -52,7 +52,7 @@ type Rule struct {
 }
 
 // LoadConfig is reponsible for loading the viper configuration file.
-func LoadConfig(file string) (*Configuration, error) {
+func LoadConfig(file string) (Configuration, error) {
 	setDefaults()
 
 	// Don't forget to read config either from cfgFile or from home directory!
@@ -83,7 +83,7 @@ func setDefaults() {
 	viper.SetDefault("server.cert-path", "/server-key")
 }
 
-func unmarshalFromViperStrict() (*Configuration, error) {
+func unmarshalFromViperStrict() (Configuration, error) {
 	var c Configuration
 	// add in a special decoder so that viper can unmarshal boolean operator values such as AND, OR and XOR
 	// and enable mapstructure's ErrorUnused checking so we can catch bad configuration keys in the source.
@@ -95,9 +95,9 @@ func unmarshalFromViperStrict() (*Configuration, error) {
 	opts := decodeHookWithErrorUnused(decoderHookFunc)
 
 	if err := viper.Unmarshal(&c, opts); err != nil {
-		return &c, fmt.Errorf("failed to unmarshal configuration: %v", err)
+		return c, fmt.Errorf("failed to unmarshal configuration: %v", err)
 	}
-	return &c, nil
+	return c, nil
 }
 
 // Our own implementation of Viper's DecodeHook so that we can set ErrorUnused to true
@@ -109,7 +109,7 @@ func decodeHookWithErrorUnused(hook mapstructure.DecodeHookFunc) viper.DecoderCo
 }
 
 // ValidateConfig is responsible for throwing errors when the configuration is bad.
-func (c *Configuration) ValidateConfig() error {
+func (c Configuration) ValidateConfig() error {
 	mylog := log.ComponentLogger(componentName, "ValidateConfig")
 	mylog.Debug().Msg("validating configuration")
 
@@ -127,7 +127,7 @@ func (c *Configuration) ValidateConfig() error {
 }
 
 // validateLogArgs check that a requested log-level is defined/allowed.
-func (c *Configuration) validateLogArgs() error {
+func (c Configuration) validateLogArgs() error {
 	mylog := log.ComponentLogger(componentName, "validateLogArgs")
 	mylog.Debug().Msg("validating logging configuration")
 	// check the configured log level is valid.
@@ -137,7 +137,7 @@ func (c *Configuration) validateLogArgs() error {
 	return nil
 }
 
-func (c *Configuration) validateWebhookArgs() error {
+func (c Configuration) validateWebhookArgs() error {
 	mylog := log.ComponentLogger(componentName, "validateWebhookArgs")
 	mylog.Debug().Msg("validating webhook configuration")
 	for _, p := range []string{"server.namespace", "server.service"} {
@@ -149,7 +149,7 @@ func (c *Configuration) validateWebhookArgs() error {
 	return nil
 }
 
-func (c *Configuration) validateRules() error {
+func (c Configuration) validateRules() error {
 	mylog := log.ComponentLogger(componentName, "validateRules")
 	mylog.Debug().Msg("validating graffiti rules")
 
