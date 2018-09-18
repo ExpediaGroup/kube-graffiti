@@ -1,0 +1,93 @@
+apiVersion: apps/v1beta2
+kind: Deployment
+metadata:
+  name: {{ include "kube-graffiti.fullname" . }}
+  labels:
+    app: {{ include "kube-graffiti.name" . }}
+    chart: {{ include "kube-graffiti.chart" . }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ include "kube-graffiti.name" . }}
+      release: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app: {{ include "kube-graffiti.name" . }}
+        release: {{ .Release.Name }}
+    spec:
+      containers:
+        - name: {{ .Chart.Name }}
+          image: "{{ .Values.image.repository }}:{{ .Chart.Version }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+          - name: GRAFFITI_LOG_LEVEL
+            value: "{{ .Values.loggingLevel }}"
+          - name: GRAFFITI_CHECK_EXISTING
+            value: "{{ .Values.checkExisting }}"
+          - name: GRAFFITI_CONFIG
+            value: "/config/graffiti-config.yaml"
+          - name: GRAFFITI_SERVER_PORT
+            value: "{{ .Values.server.port }}"
+          - name: GRAFFITI_HEALTH_CHECKER_PORT
+            value: "{{ .Values.healthChecker.port }}"
+          - name: GRAFFITI_HEALTH_CHECKER_PATH
+            value: "{{ .Values.healthChecker.path }}"
+          - name: GRAFFITI_SERVER_COMPANY_DOMAIN
+            value: "{{ .Values.server.companyDomain }}"
+          - name: GRAFFITI_SERVER_CA_CERT_PATH
+            value: /tls/ca-cert
+          - name: GRAFFITI_SERVER_CERT_PATH
+            value: /tls/server-cert
+          - name: GRAFFITI_SERVER_KEY_PATH
+            value: /tls/server-key
+          - name: GRAFFITI_SERVER_NAMESPACE
+            value: "{{ .Release.Namespace }}"
+          - name: GRAFFITI_SERVER_SERVICE
+            value: "{{ include "kube-graffiti.fullname" . }}"
+          ports:
+          - name: https
+            containerPort: {{ .Values.server.port }}
+            protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: {{ .Values.healthChecker.path }}
+              port: {{ .Values.healthChecker.port }}
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 3
+          readinessProbe:
+            httpGet:
+              path: {{ .Values.healthChecker.path }}
+              port: {{ .Values.healthChecker.port }}
+            periodSeconds: 10
+            timeoutSeconds: 3
+          volumeMounts:
+          - name: webhook-certs
+            mountPath: /tls
+          - name: config
+            mountPath: /config
+          resources:
+{{ toYaml .Values.resources | indent 12 }}
+    {{- with .Values.nodeSelector }}
+      nodeSelector:
+{{ toYaml . | indent 8 }}
+    {{- end }}
+    {{- with .Values.affinity }}
+      affinity:
+{{ toYaml . | indent 8 }}
+    {{- end }}
+    {{- with .Values.tolerations }}
+      tolerations:
+{{ toYaml . | indent 8 }}
+    {{- end }}
+      volumes:
+      - name: webhook-certs
+        secret:
+          secretName: {{ .Release.Name }}-kube-graffiti-certs
+      - name: config
+        configMap:
+          name: {{ .Release.Name }}-kube-graffiti-config

@@ -1,0 +1,22 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-kube-graffiti-config
+data:
+  graffiti-config.yaml: |
+    server:
+      service: {{ .Release.Name }}-kube-graffiti
+    rules:
+    - registration:
+        name: add-name-label-to-namespaces
+        targets:
+        - api-groups:
+          - ""
+          api-versions:
+          - v1
+          resources:
+          - namespaces
+        failure-policy: Ignore
+      additions:
+        labels:
+          name: '{{"{{"}} index . "metadata.name" {{"}}"}}'
