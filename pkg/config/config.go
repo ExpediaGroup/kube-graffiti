@@ -3,10 +3,7 @@ package config
 import (
 	"errors"
 	"fmt"
-	"os"
 
-	"github.com/mitchellh/mapstructure"
-	"github.com/rs/zerolog"
 	"github.com/spf13/viper"
 	"stash.hcom/run/kube-graffiti/pkg/graffiti"
 	"stash.hcom/run/kube-graffiti/pkg/healthcheck"
@@ -16,9 +13,6 @@ import (
 
 const (
 	componentName = "config"
-	// DefaultLogLevel - the zero logging level set for whole program
-	DefaultLogLevel   = "info"
-	defaultConfigPath = "/config"
 )
 
 // All of our configuration modelled with mapstructure tags so that we can use viper to properly parse and load it for us.
@@ -49,63 +43,6 @@ type Rule struct {
 	Registration webhook.Registration `mapstructure:"registration" yaml:"registration"`
 	Matchers     graffiti.Matchers    `mapstructure:"matchers" yaml:"matchers,omitempty"`
 	Payload      graffiti.Payload     `mapstructure:"payload" yaml:"payload"`
-}
-
-// LoadConfig is reponsible for loading the viper configuration file.
-func LoadConfig(file string) (Configuration, error) {
-	setDefaults()
-
-	// Don't forget to read config either from cfgFile or from home directory!
-	if file != "" {
-		// Use config file from the flag.
-		viper.SetConfigFile(file)
-	} else {
-		viper.SetConfigName(defaultConfigPath)
-	}
-
-	if err := viper.ReadInConfig(); err != nil {
-		fmt.Println("Can't read config:", err)
-		os.Exit(1)
-	}
-
-	return unmarshalFromViperStrict()
-}
-
-func setDefaults() {
-	viper.SetDefault("log-level", DefaultLogLevel)
-	viper.SetDefault("check-existing", false)
-	viper.SetDefault("server.port", 8443)
-	viper.SetDefault("health-checker.port", 8080)
-	viper.SetDefault("health-checker.path", "/healthz")
-	viper.SetDefault("server.company-domain", "acme.com")
-	viper.SetDefault("server.ca-cert-path", "/ca-cert")
-	viper.SetDefault("server.cert-path", "/server-cert")
-	viper.SetDefault("server.cert-path", "/server-key")
-}
-
-func unmarshalFromViperStrict() (Configuration, error) {
-	var c Configuration
-	// add in a special decoder so that viper can unmarshal boolean operator values such as AND, OR and XOR
-	// and enable mapstructure's ErrorUnused checking so we can catch bad configuration keys in the source.
-	decoderHookFunc := mapstructure.ComposeDecodeHookFunc(
-		mapstructure.StringToTimeDurationHookFunc(),
-		mapstructure.StringToSliceHookFunc(","),
-		graffiti.StringToBooleanOperatorFunc(),
-	)
-	opts := decodeHookWithErrorUnused(decoderHookFunc)
-
-	if err := viper.Unmarshal(&c, opts); err != nil {
-		return c, fmt.Errorf("failed to unmarshal configuration: %v", err)
-	}
-	return c, nil
-}
-
-// Our own implementation of Viper's DecodeHook so that we can set ErrorUnused to true
-func decodeHookWithErrorUnused(hook mapstructure.DecodeHookFunc) viper.DecoderConfigOption {
-	return func(c *mapstructure.DecoderConfig) {
-		c.DecodeHook = hook
-		c.ErrorUnused = true
-	}
 }
 
 // ValidateConfig is responsible for throwing errors when the configuration is bad.
@@ -167,45 +104,13 @@ func (c Configuration) validateRules() error {
 		}
 		existingRuleNames[rule.Registration.Name] = true
 
-		if err := validateRule(rule); err != nil {
+		gr := graffiti.Rule{
+			Name:     rule.Registration.Name,
+			Matchers: rule.Matchers,
+			Payload:  rule.Payload,
+		}
+		if err := gr.Validate(mylog); err != nil {
 			return err
-		}
-	}
-	return nil
-}
-
-func validateRule(rule Rule) error {
-	mylog := log.ComponentLogger(componentName, "validateRule")
-	rulelog := mylog.With().Str("rule", rule.Registration.Name).Logger()
-
-	if err := rule.validateRuleSelectors(rulelog); err != nil {
-		return err
-	}
-	if err := rule.Payload.Validate(); err != nil {
-		mylog.Error().Err(err).Msg("rule is invalid payload")
-		return fmt.Errorf("rule %s is invalid - contains invalid payload: %v", rule.Registration.Name, err)
-	}
-	return nil
-}
-
-func (rule Rule) validateRuleSelectors(rulelog zerolog.Logger) error {
-	// all label selectors must be valid...
-	if len(rule.Matchers.LabelSelectors) > 0 {
-		for _, selector := range rule.Matchers.LabelSelectors {
-			if err := graffiti.ValidateLabelSelector(selector); err != nil {
-				rulelog.Error().Str("label-selector", selector).Msg("rule contains an invalid label selector")
-				return fmt.Errorf("rule %s is invalid - contains invalid label selector '%s': %v", rule.Registration.Name, selector, err)
-			}
-		}
-	}
-
-	// all field selectors must also be valid...
-	if len(rule.Matchers.FieldSelectors) > 0 {
-		for _, selector := range rule.Matchers.FieldSelectors {
-			if err := graffiti.ValidateFieldSelector(selector); err != nil {
-				rulelog.Error().Str("field-selector", selector).Msg("rule contains an invalid field selector")
-				return fmt.Errorf("rule %s is invalid - contains invalid field selector '%s': %v", rule.Registration.Name, selector, err)
-			}
 		}
 	}
 	return nil

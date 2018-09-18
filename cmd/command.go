@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mitchellh/mapstructure"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"k8s.io/client-go/kubernetes"
@@ -19,6 +20,12 @@ import (
 	"stash.hcom/run/kube-graffiti/pkg/healthcheck"
 	"stash.hcom/run/kube-graffiti/pkg/log"
 	"stash.hcom/run/kube-graffiti/pkg/webhook"
+)
+
+const (
+	// DefaultLogLevel - the zero logging level set for whole program
+	DefaultLogLevel   = "info"
+	defaultConfigPath = "/config"
 )
 
 var (
@@ -67,7 +74,7 @@ func runRootCmd(_ *cobra.Command, _ []string) {
 	mylog := log.ComponentLogger(componentName, "runRootCmd")
 
 	mylog.Info().Str("file", viper.GetString("config")).Msg("reading configuration file")
-	config, err := config.LoadConfig(viper.GetString("config"))
+	config, err := loadConfig(viper.GetString("config"))
 	if err != nil {
 		mylog.Fatal().Err(err).Msg("failed to load config")
 	}
@@ -190,4 +197,61 @@ func initExistingCheck(config config.Configuration, r *rest.Config) error {
 	mylog.Info().Msg("check of existing objects completed successfully")
 
 	return nil
+}
+
+// LoadConfig is reponsible for loading the viper configuration file.
+func loadConfig(file string) (config.Configuration, error) {
+	setDefaults()
+
+	// Don't forget to read config either from cfgFile or from home directory!
+	if file != "" {
+		// Use config file from the flag.
+		viper.SetConfigFile(file)
+	} else {
+		viper.SetConfigName(defaultConfigPath)
+	}
+
+	if err := viper.ReadInConfig(); err != nil {
+		fmt.Println("Can't read config:", err)
+		os.Exit(1)
+	}
+
+	return unmarshalFromViperStrict()
+}
+
+func setDefaults() {
+	viper.SetDefault("log-level", DefaultLogLevel)
+	viper.SetDefault("check-existing", false)
+	viper.SetDefault("server.port", 8443)
+	viper.SetDefault("health-checker.port", 8080)
+	viper.SetDefault("health-checker.path", "/healthz")
+	viper.SetDefault("server.company-domain", "acme.com")
+	viper.SetDefault("server.ca-cert-path", "/ca-cert")
+	viper.SetDefault("server.cert-path", "/server-cert")
+	viper.SetDefault("server.cert-path", "/server-key")
+}
+
+func unmarshalFromViperStrict() (config.Configuration, error) {
+	var c config.Configuration
+	// add in a special decoder so that viper can unmarshal boolean operator values such as AND, OR and XOR
+	// and enable mapstructure's ErrorUnused checking so we can catch bad configuration keys in the source.
+	decoderHookFunc := mapstructure.ComposeDecodeHookFunc(
+		mapstructure.StringToTimeDurationHookFunc(),
+		mapstructure.StringToSliceHookFunc(","),
+		graffiti.StringToBooleanOperatorFunc(),
+	)
+	opts := decodeHookWithErrorUnused(decoderHookFunc)
+
+	if err := viper.Unmarshal(&c, opts); err != nil {
+		return c, fmt.Errorf("failed to unmarshal configuration: %v", err)
+	}
+	return c, nil
+}
+
+// Our own implementation of Viper's DecodeHook so that we can set ErrorUnused to true
+func decodeHookWithErrorUnused(hook mapstructure.DecodeHookFunc) viper.DecoderConfigOption {
+	return func(c *mapstructure.DecoderConfig) {
+		c.DecodeHook = hook
+		c.ErrorUnused = true
+	}
 }

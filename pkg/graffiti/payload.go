@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	jsonpatch "github.com/cameront/go-jsonpatch"
-	"github.com/davecgh/go-spew/spew"
 	"github.com/rs/zerolog"
 	apivalidation "k8s.io/apimachinery/pkg/api/validation"
 	utilvalidation "k8s.io/apimachinery/pkg/util/validation"
@@ -64,10 +63,9 @@ func (p Payload) paintObject(object metaObject, fm map[string]string, logger zer
 	if patchString == "" {
 		mylog.Info().Msg("paint resulted in no patch")
 		return nil, nil
-	} else {
-		mylog.Info().Str("patch", patchString).Msg("created json patch")
 	}
 
+	mylog.Info().Str("patch", patchString).Msg("created json patch")
 	return []byte(patchString), nil
 }
 
@@ -117,7 +115,7 @@ func (p Payload) processMetadataAdditionsDeletions(obj metaObject, fm map[string
 }
 
 // Validate can be used by clients of payload to validate that its syntax and contents are correct.
-func (p Payload) Validate() error {
+func (p Payload) validate() error {
 	var payloadTypes = 0
 	var hasJSONPatch bool
 	var hasAdditionsDeletions bool
@@ -154,11 +152,8 @@ func (p Payload) Validate() error {
 // and return an error if the patch syntax is invalid.
 func validateJSONPatch(p string) error {
 	fmt.Printf("validating json patch: %s\n", p)
-	if res, err := jsonpatch.FromString(p); err != nil {
-		spew.Dump(res)
+	if _, err := jsonpatch.FromString(p); err != nil {
 		return fmt.Errorf("invalid json-patch: %v", err)
-	} else {
-		spew.Dump(res)
 	}
 	return nil
 }

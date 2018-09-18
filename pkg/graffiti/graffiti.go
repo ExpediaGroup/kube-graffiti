@@ -4,16 +4,16 @@ package graffiti
 
 import (
 	//"stash.hcom/run/istio-namespace-webhook/pkg/log"
+
 	"bytes"
 	"encoding/json"
 	"fmt"
 
 	// "github.com/davecgh/go-spew/spew"
 
+	"github.com/rs/zerolog"
 	admission "k8s.io/api/admission/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/fields"
-	labels "k8s.io/apimachinery/pkg/labels"
 	"stash.hcom/run/kube-graffiti/pkg/log"
 )
 
@@ -39,17 +39,20 @@ type Rule struct {
 	Payload  Payload
 }
 
-// Matchers manages the rules of matching an object
-// This type is directly marshalled from config and so has mapstructure tags
-type Matchers struct {
-	LabelSelectors  []string        `mapstructure:"label-selectors" yaml:"label-selectors,omitempty"`
-	FieldSelectors  []string        `mapstructure:"field-selectors" yaml:"field-selectors,omitempty"`
-	BooleanOperator BooleanOperator `mapstructure:"boolean-operator" yaml:"boolean-operator,omitempty"`
-}
-
 // metaObject is used only for pulling out object metadata
 type metaObject struct {
 	Meta metav1.ObjectMeta `json:"metadata"`
+}
+
+// Validate - validates the matchers and payload of a graffiti rule
+func (r Rule) Validate(rulelog zerolog.Logger) (err error) {
+	if err = r.Matchers.validate(rulelog); err != nil {
+		return fmt.Errorf("rule '%s' failed validation: %v", r.Name, err)
+	}
+	if err = r.Payload.validate(); err != nil {
+		return fmt.Errorf("rule '%s' failed validation: %v", r.Name, err)
+	}
+	return nil
 }
 
 // MutateAdmission takes an admission request and generates an admission response based on the response from Mutate.
@@ -58,10 +61,24 @@ func (r Rule) MutateAdmission(req *admission.AdmissionRequest) *admission.Admiss
 	mylog := log.ComponentLogger(componentName, "MutateAdmission")
 	mylog = mylog.With().Str("rule", r.Name).Str("kind", req.Kind.String()).Str("name", req.Name).Str("namespace", req.Namespace).Logger()
 
+	object, err := extractObject(req)
+	if err != nil {
+		admissionResponseError(fmt.Errorf("failed to extract object from admission request: %v", err))
+	}
+
+	patch, err := r.Mutate(object)
+	if err != nil {
+		return admissionResponseError(fmt.Errorf("failed to mutate object: %v", err))
+	}
+
+	return patchResult(patch, r.Name)
+}
+
+func extractObject(req *admission.AdmissionRequest) (result []byte, err error) {
 	// make sure that name and namespace fields are populated in the metadata object
 	object := make(map[string]interface{})
-	if err := json.Unmarshal(req.Object.Raw, &object); err != nil {
-		return admissionResponseError(fmt.Errorf("failed to unmarshal object from the admission request: %v", err))
+	if err = json.Unmarshal(req.Object.Raw, &object); err != nil {
+		return result, err
 	}
 	if req.Name != "" {
 		addMetadata(object, "name", req.Name)
@@ -69,16 +86,10 @@ func (r Rule) MutateAdmission(req *admission.AdmissionRequest) *admission.Admiss
 	if req.Namespace != "" {
 		addMetadata(object, "namespace", req.Namespace)
 	}
-	updatedObject, err := json.Marshal(object)
-	if err != nil {
-		return admissionResponseError(fmt.Errorf("failed to marshal object: %v", err))
-	}
+	return json.Marshal(object)
+}
 
-	patch, err := r.Mutate(updatedObject)
-	if err != nil {
-		return admissionResponseError(fmt.Errorf("failed to mutate object: %v", err))
-	}
-
+func patchResult(patch []byte, name string) *admission.AdmissionResponse {
 	if patch == nil {
 		return &admission.AdmissionResponse{
 			Allowed: true,
@@ -94,7 +105,7 @@ func (r Rule) MutateAdmission(req *admission.AdmissionRequest) *admission.Admiss
 			Allowed: false,
 			Result: &metav1.Status{
 				Reason:  metav1.StatusReasonForbidden,
-				Message: fmt.Sprintf("blocked by kube-graffiti rule: %s", r.Name),
+				Message: fmt.Sprintf("blocked by kube-graffiti rule: %s", name),
 			},
 			Patch: nil,
 		}
@@ -141,12 +152,7 @@ func admissionResponseError(err error) *admission.AdmissionResponse {
 func (r Rule) Mutate(object []byte) (patch []byte, err error) {
 	mylog := log.ComponentLogger(componentName, "Mutate")
 	mylog = mylog.With().Str("rule", r.Name).Logger()
-	var (
-		paintIt      = false
-		labelMatches = false
-		fieldMatches = false
-		metaObject   metaObject
-	)
+	var metaObject metaObject
 
 	if err := json.Unmarshal(object, &metaObject); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal generic object metadata from the admission request: %v", err)
@@ -158,154 +164,15 @@ func (r Rule) Mutate(object []byte) (patch []byte, err error) {
 		return nil, err
 	}
 
-	if len(r.Matchers.LabelSelectors) == 0 && len(r.Matchers.FieldSelectors) == 0 {
-		mylog.Debug().Msg("rule does not contain any label or field selectors so it matches ALL")
-		paintIt = true
-	} else {
-		// match against all of the label selectors
-		mylog.Debug().Int("count", len(r.Matchers.LabelSelectors)).Msg("matching against label selectors")
-		labelMatches, err = r.matchLabelSelectors(metaObject)
-		if err != nil {
-			return nil, err
-		}
-
-		// test if we match any field selectors
-		mylog.Debug().Int("count", len(r.Matchers.FieldSelectors)).Msg("matching against field selectors")
-		fieldMatches, err = r.matchFieldSelectors(fieldMap)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	mylog.Debug().Bool("paintIt", paintIt).Msg("boolean result of paintIt before boolean operator")
-
-	// Combine selector booleans and decide to paint object or not
-	if !paintIt {
-		descisonLog := mylog.With().Int("label-selectors-length", len(r.Matchers.LabelSelectors)).Bool("labels-matched", labelMatches).Int("field-selector-length", len(r.Matchers.FieldSelectors)).Bool("fields-matched", fieldMatches).Logger()
-		switch r.Matchers.BooleanOperator {
-		case AND:
-			paintIt = (len(r.Matchers.LabelSelectors) == 0 || labelMatches) && (len(r.Matchers.FieldSelectors) == 0 || fieldMatches)
-			descisonLog.Debug().Str("boolean-operator", "AND").Bool("result", paintIt).Msg("performed label-selector AND field-selector")
-		case OR:
-			paintIt = (len(r.Matchers.LabelSelectors) != 0 && labelMatches) || (len(r.Matchers.FieldSelectors) != 0 && fieldMatches)
-			descisonLog.Debug().Str("boolean-operator", "OR").Bool("result", paintIt).Msg("performed label-selector OR field-selector")
-		case XOR:
-			paintIt = labelMatches != fieldMatches
-			descisonLog.Debug().Str("boolean-operator", "XOR").Bool("result", paintIt).Msg("performed label-selector XOR field-selector")
-		default:
-			paintIt = false
-			descisonLog.Fatal().Str("boolean-operator", "UNKNOWN").Bool("result", paintIt).Msg("Boolean Operator isn't one of AND, OR, XOR")
-		}
-	}
-
-	mylog.Debug().Bool("matches", paintIt).Msg("result of boolean operator match on selectors")
-
-	if !paintIt {
-		mylog.Info().Msg("rule didn't match")
-		return nil, nil
-	}
-
-	mylog.Info().Msg("rule matched - painting object")
-	return r.Payload.paintObject(metaObject, fieldMap, mylog)
-}
-
-// ValidateFieldSelector checks that a field selector parses correctly and is used when validating config
-func ValidateFieldSelector(selector string) error {
-	if _, err := fields.ParseSelector(selector); err != nil {
-		return err
-	}
-	return nil
-}
-
-func (r Rule) matchLabelSelectors(object metaObject) (bool, error) {
-	mylog := log.ComponentLogger(componentName, "matchLabelSelectors")
-	// test if we matched any of the label selectors
-	if len(r.Matchers.LabelSelectors) != 0 {
-		sourceLabels := make(map[string]string)
-		// make it so we can use name and namespace as label selectors
-		sourceLabels["name"] = object.Meta.Name
-		sourceLabels["namespace"] = object.Meta.Namespace
-		for k, v := range object.Meta.Labels {
-			sourceLabels[k] = v
-		}
-
-		for _, selector := range r.Matchers.LabelSelectors {
-			mylog.Debug().Str("label-selector", selector).Msg("testing label selector")
-			selectorMatch, err := MatchLabelSelector(selector, sourceLabels)
-			if err != nil {
-				return false, err
-			}
-			if selectorMatch {
-				mylog.Debug().Str("label-selector", selector).Msg("selector matches, will modify object")
-				return true, nil
-			}
-		}
-	}
-	return false, nil
-}
-
-// MatchLabelSelector will apply a kubernetes labels.Selector to a map[string]string and return a matched bool and error.
-// It is exported so that it can be used in 'existing' package for processing namespace selectors.
-func MatchLabelSelector(selector string, target map[string]string) (bool, error) {
-	mylog := log.ComponentLogger(componentName, "MatchLabelSelector")
-	selLog := mylog.With().Str("selector", selector).Logger()
-
-	realSelector, err := labels.Parse(selector)
+	match, err := r.Matchers.matches(metaObject, fieldMap, mylog)
 	if err != nil {
-		selLog.Error().Err(err).Msg("could not parse selector")
-		return false, err
+		return nil, err
+	}
+	if match {
+		mylog.Info().Msg("rule matched - painting object")
+		return r.Payload.paintObject(metaObject, fieldMap, mylog)
 	}
 
-	set := labels.Set(target)
-	if !realSelector.Matches(set) {
-		selLog.Debug().Msg("selector does not match")
-		return false, nil
-	}
-	selLog.Debug().Msg("selector matches")
-	return true, nil
-}
-
-// ValidateLabelSelector checks that a label selector parses correctly and is used when validating config
-func ValidateLabelSelector(selector string) error {
-	if _, err := labels.Parse(selector); err != nil {
-		return err
-	}
-	return nil
-}
-
-func (r Rule) matchFieldSelectors(fm map[string]string) (bool, error) {
-	mylog := log.ComponentLogger(componentName, "matchFieldSelectors")
-	if len(r.Matchers.FieldSelectors) != 0 {
-		for _, selector := range r.Matchers.FieldSelectors {
-			mylog.Debug().Str("field-selector", selector).Msg("testing field selector")
-			selectorMatch, err := matchFieldSelector(selector, fm)
-			if err != nil {
-				return false, err
-			}
-			if selectorMatch {
-				mylog.Debug().Str("field-selector", selector).Msg("selector matches, will modify object")
-				return true, nil
-			}
-		}
-	}
-	return false, nil
-}
-
-// matchSelector will apply a kubernetes labels.Selector to a map[string]string and return a matched bool and error.
-func matchFieldSelector(selector string, target map[string]string) (bool, error) {
-	mylog := log.ComponentLogger(componentName, "matchFieldSelector")
-	selLog := mylog.With().Str("selector", selector).Logger()
-	realSelector, err := fields.ParseSelector(selector)
-	if err != nil {
-		selLog.Error().Err(err).Msg("could not parse selector")
-		return false, err
-	}
-
-	set := labels.Set(target)
-	if !realSelector.Matches(set) {
-		selLog.Debug().Msg("selector does not match")
-		return false, nil
-	}
-	selLog.Debug().Msg("selector matches")
-	return true, nil
+	mylog.Info().Msg("rule didn't match - not painting object")
+	return nil, nil
 }
