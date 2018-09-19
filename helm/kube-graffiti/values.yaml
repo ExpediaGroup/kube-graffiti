@@ -33,6 +33,7 @@ affinity: {}
 loggingLevel: info
 checkExisting: "true"
 configMapName: ""
+serviceName: ""
 
 healthChecker:
   port: 8080
