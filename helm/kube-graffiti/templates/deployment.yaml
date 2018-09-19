@@ -24,30 +24,8 @@ spec:
           image: "{{ .Values.image.repository }}:{{ .Chart.Version }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           env:
-          - name: GRAFFITI_LOG_LEVEL
-            value: "{{ .Values.loggingLevel }}"
-          - name: GRAFFITI_CHECK_EXISTING
-            value: "{{ .Values.checkExisting }}"
           - name: GRAFFITI_CONFIG
             value: "/config/graffiti-config.yaml"
-          - name: GRAFFITI_SERVER_PORT
-            value: "{{ .Values.server.port }}"
-          - name: GRAFFITI_HEALTH_CHECKER_PORT
-            value: "{{ .Values.healthChecker.port }}"
-          - name: GRAFFITI_HEALTH_CHECKER_PATH
-            value: "{{ .Values.healthChecker.path }}"
-          - name: GRAFFITI_SERVER_COMPANY_DOMAIN
-            value: "{{ .Values.server.companyDomain }}"
-          - name: GRAFFITI_SERVER_CA_CERT_PATH
-            value: /tls/ca-cert
-          - name: GRAFFITI_SERVER_CERT_PATH
-            value: /tls/server-cert
-          - name: GRAFFITI_SERVER_KEY_PATH
-            value: /tls/server-key
-          - name: GRAFFITI_SERVER_NAMESPACE
-            value: "{{ .Release.Namespace }}"
-          - name: GRAFFITI_SERVER_SERVICE
-            value: "{{ include "kube-graffiti.fullname" . }}"
           ports:
           - name: https
             containerPort: {{ .Values.server.port }}
