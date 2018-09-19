@@ -15,7 +15,7 @@ spec:
       labels:
         app: kube-graffiti
     spec:
-      serviceAccount: kube-graffiti
+      serviceAccountName: kube-graffiti
       containers:
         - name: kube-graffiti
           image: kube-graffiti:dev
