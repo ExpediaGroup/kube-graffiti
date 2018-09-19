@@ -34,9 +34,9 @@ const (
 // Rule contains a single graffiti rule and contains matchers for choosing which objects to change and payload containing the change.
 // It does not have mapstructure tags because it is not directly marshalled from config
 type Rule struct {
-	Name     string
-	Matchers Matchers
-	Payload  Payload
+	Name     string   `yaml:"name,omitempty"`
+	Matchers Matchers `yaml:"matchers,omitempty"`
+	Payload  Payload  `yaml:"payload,omitempty"`
 }
 
 // metaObject is used only for pulling out object metadata

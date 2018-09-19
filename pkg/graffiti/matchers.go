@@ -21,7 +21,7 @@ func (m Matchers) validate(rulelog zerolog.Logger) error {
 	// all label selectors must be valid...
 	if len(m.LabelSelectors) > 0 {
 		for _, selector := range m.LabelSelectors {
-			if err := validateLabelSelector(selector); err != nil {
+			if err := ValidateLabelSelector(selector); err != nil {
 				rulelog.Error().Str("label-selector", selector).Msg("matcher contains an invalid label selector")
 				return fmt.Errorf("matcher contains an invalid label selector '%s': %v", selector, err)
 			}
@@ -41,7 +41,7 @@ func (m Matchers) validate(rulelog zerolog.Logger) error {
 }
 
 // validateLabelSelector checks that a label selector parses correctly and is used when validating config
-func validateLabelSelector(selector string) error {
+func ValidateLabelSelector(selector string) error {
 	if _, err := labels.Parse(selector); err != nil {
 		return err
 	}
@@ -109,7 +109,7 @@ func (m Matchers) matchLabelSelectors(object metaObject) (bool, error) {
 
 		for _, selector := range m.LabelSelectors {
 			mylog.Debug().Str("label-selector", selector).Msg("testing label selector")
-			selectorMatch, err := matchLabelSelector(selector, sourceLabels)
+			selectorMatch, err := MatchLabelSelector(selector, sourceLabels)
 			if err != nil {
 				return false, err
 			}
@@ -124,7 +124,7 @@ func (m Matchers) matchLabelSelectors(object metaObject) (bool, error) {
 
 // matchLabelSelector will apply a kubernetes labels.Selector to a map[string]string and return a matched bool and error.
 // It is exported so that it can be used in 'existing' package for processing namespace selectors.
-func matchLabelSelector(selector string, target map[string]string) (bool, error) {
+func MatchLabelSelector(selector string, target map[string]string) (bool, error) {
 	mylog := log.ComponentLogger(componentName, "MatchLabelSelector")
 	selLog := mylog.With().Str("selector", selector).Logger()
 

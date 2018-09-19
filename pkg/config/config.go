@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/spf13/viper"
 	"stash.hcom/run/kube-graffiti/pkg/graffiti"
 	"stash.hcom/run/kube-graffiti/pkg/healthcheck"
 	"stash.hcom/run/kube-graffiti/pkg/log"
@@ -19,23 +18,23 @@ const (
 
 // Configuration models the structre of our configuration values loaded through viper.
 type Configuration struct {
-	_             string                    `mapstructure:"config"`
-	LogLevel      string                    `mapstructure:"log-level"`
-	CheckExisting bool                      `mapstructure:"check-existing"`
-	HealthChecker healthcheck.HealthChecker `mapstructure:"health-checker"`
-	Server        Server                    `mapstructure:"server"`
-	Rules         []Rule                    `mapstructure:"rules"`
+	_             string                    `mapstructure:"config" yaml:"config"`
+	LogLevel      string                    `mapstructure:"log-level" yaml:"log-level"`
+	CheckExisting bool                      `mapstructure:"check-existing" yaml:"check-existing,omitempty"`
+	HealthChecker healthcheck.HealthChecker `mapstructure:"health-checker" yaml:"health-checker,omitempty"`
+	Server        Server                    `mapstructure:"server" yaml:"server"`
+	Rules         []Rule                    `mapstructure:"rules" yaml:"rules"`
 }
 
 // Server contains all the settings for the webhook https server and access from the kubernetes api.
 type Server struct {
-	WebhookPort    int    `mapstructure:"port"`
-	CompanyDomain  string `mapstructure:"company-domain"`
-	Namespace      string `mapstructure:"namespace"`
-	Service        string `mapstructure:"service"`
-	CACertPath     string `mapstructure:"ca-cert-path"`
-	ServerCertPath string `mapstructure:"cert-path"`
-	ServerKeyPath  string `mapstructure:"key-path"`
+	WebhookPort    int    `mapstructure:"port" yaml:"port"`
+	CompanyDomain  string `mapstructure:"company-domain" yaml:"company-domain"`
+	Namespace      string `mapstructure:"namespace" yaml:"namespace"`
+	Service        string `mapstructure:"service" yaml:"service"`
+	CACertPath     string `mapstructure:"ca-cert-path" yaml:"ca-cert-path"`
+	ServerCertPath string `mapstructure:"cert-path" yaml:"cert-path"`
+	ServerKeyPath  string `mapstructure:"key-path" yaml:"key-path"`
 }
 
 // Rule models a single graffiti rule with three sections for managing registration, matching and the payload to graffiti on the object.
@@ -77,11 +76,13 @@ func (c Configuration) validateLogArgs() error {
 func (c Configuration) validateWebhookArgs() error {
 	mylog := log.ComponentLogger(componentName, "validateWebhookArgs")
 	mylog.Debug().Msg("validating webhook configuration")
-	for _, p := range []string{"server.namespace", "server.service"} {
-		if !viper.IsSet(p) {
-			mylog.Error().Str("parameter", p).Msg("missing required parameter value")
-			return fmt.Errorf("missing required parameter")
-		}
+	if c.Server.Namespace == "" {
+		mylog.Error().Str("parameter", "server.namespace").Msg("missing required parameter server.namespace")
+		return fmt.Errorf("missing required parameter server.namespace")
+	}
+	if c.Server.Service == "" {
+		mylog.Error().Str("parameter", "server.service").Msg("missing required parameter server.service")
+		return fmt.Errorf("missing required parameter server.service")
 	}
 	return nil
 }

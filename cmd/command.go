@@ -45,7 +45,7 @@ var (
 func init() {
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "/config", "[GRAFFITI_CONFIG] config file (default is /config.{yaml,json,toml,hcl})")
 	viper.BindPFlag("config", rootCmd.PersistentFlags().Lookup("config"))
-	rootCmd.PersistentFlags().String("log-level", config.DefaultLogLevel, "[GRAFFITI_LOG_LEVEL] set logging verbosity to one of panic, fatal, error, warn, info, debug")
+	rootCmd.PersistentFlags().String("log-level", DefaultLogLevel, "[GRAFFITI_LOG_LEVEL] set logging verbosity to one of panic, fatal, error, warn, info, debug")
 	viper.BindPFlag("log-level", rootCmd.PersistentFlags().Lookup("log-level"))
 	// viper.BindEnv("log-level", "GRAFFITI_LOG_LEVEL")
 	rootCmd.PersistentFlags().Bool("check-existing", false, "[GRAFFITTI_CHECK_EXISTING] run rules against existing objects")
