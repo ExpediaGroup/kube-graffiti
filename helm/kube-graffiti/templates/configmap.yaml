@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: {{ .Release.Name }}-kube-graffiti-config
+  name: {{ .Release.Name }}-default-kube-graffiti-config
 data:
   graffiti-config.yaml: |
     log-level: {{ .Values.loggingLevel }}
