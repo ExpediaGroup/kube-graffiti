@@ -68,4 +68,8 @@ spec:
           secretName: {{ .Release.Name }}-kube-graffiti-certs
       - name: config
         configMap:
-          name: {{ .Release.Name }}-kube-graffiti-config
+          {{ if eq .Values.configMapName "" -}}
+          name: {{ .Release.Name }}-default-kube-graffiti-config
+          {{ else -}}
+          name: {{ .Values.configMapName }}
+          {{- end }}
