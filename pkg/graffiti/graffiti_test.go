@@ -5,36 +5,38 @@ import (
 	"testing"
 
 	jsonpatch "github.com/cameront/go-jsonpatch"
+	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	yaml "gopkg.in/yaml.v2"
 	admission "k8s.io/api/admission/v1beta1"
 )
 
-const testReview = `{  
+const testReview = `{
 	"kind":"AdmissionReview",
 	"apiVersion":"admission.k8s.io/v1beta1",
-	"request":{  
+	"request":{
 	   "uid":"69f7d25a-963e-11e8-a77c-08002753edac",
-	   "kind":{  
+	   "kind":{
 		  "group":"",
 		  "version":"v1",
 		  "kind":"Namespace"
 	   },
-	   "resource":{  
+	   "resource":{
 		  "group":"",
 		  "version":"v1",
 		  "resource":"namespaces"
 	   },
 	   "operation":"CREATE",
-	   "userInfo":{  
+	   "userInfo":{
 		  "username":"minikube-user",
-		  "groups":[  
+		  "groups":[
 			 "system:masters",
 			 "system:authenticated"
 		  ]
 	   },
-	   "object":{  
-		  "metadata":{  
+	   "object":{
+		  "metadata":{
 			 "name":"test-namespace",
 			 "creationTimestamp":null,
 			 "labels":{
@@ -46,10 +48,10 @@ const testReview = `{
 				 "prometheus.io/path": "/metrics"
 			 }
 		  },
-		  "spec":{  
- 
+		  "spec":{
+
 		  },
-		  "status":{  
+		  "status":{
 			 "phase":"Active"
 		  }
 	   },
@@ -57,37 +59,44 @@ const testReview = `{
 	}
  }`
 
+func TestAddMetadata(t *testing.T) {
+	var a map[string]interface{}
+
+	addMetadata(a, "b", "c")
+	addMetadata(a, "x", "y")
+}
+
 func TestReviewObjectDoesNotHaveMetaData(t *testing.T) {
 	rule := Rule{Matchers: Matchers{LabelSelectors: []string{"author = stephen"}}}
 
-	var missingMetaData = `{  
+	var missingMetaData = `{
 		"kind":"AdmissionReview",
 		"apiVersion":"admission.k8s.io/v1beta1",
-		"request":{  
+		"request":{
 		   "uid":"69f7d25a-963e-11e8-a77c-08002753edac",
-		   "kind":{  
+		   "kind":{
 			  "group":"",
 			  "version":"v1",
 			  "kind":"Namespace"
 		   },
-		   "resource":{  
+		   "resource":{
 			  "group":"",
 			  "version":"v1",
 			  "resource":"namespaces"
 		   },
 		   "operation":"CREATE",
-		   "userInfo":{  
+		   "userInfo":{
 			  "username":"minikube-user",
-			  "groups":[  
+			  "groups":[
 				 "system:masters",
 				 "system:authenticated"
 			  ]
 		   },
-		   "object":{  
-			  "spec":{  
-	 
+		   "object":{
+			  "spec":{
+
 			  },
-			  "status":{  
+			  "status":{
 				 "phase":"Active"
 			  }
 		   },
@@ -109,62 +118,20 @@ func TestReviewObjectDoesNotHaveMetaData(t *testing.T) {
 func TestNoSelectorsMeansMatchEverything(t *testing.T) {
 	// create a Rule
 	rule := Rule{
-		Additions: Additions{Labels: map[string]string{"modified-by-graffiti": "abc123"}},
-	}
-
-	// create a review request
-	var review = admission.AdmissionReview{}
-	err := json.Unmarshal([]byte(testReview), &review)
-	require.NoError(t, err, "couldn't marshall a valid admission review object from test json")
-
-	// call Mutate
-	resp := rule.MutateAdmission(review.Request)
-
-	assert.Equal(t, true, resp.Allowed, "failed rules should not block the source api request")
-	assert.NotNil(t, resp.Patch)
-
-	// we have to test the patch objects because they have multiple values and can be ordered either way round preventing a simple string match.
-	desired, _ := jsonpatch.FromString(`[ { "op": "replace", "path": "/metadata/labels", "value": { "author": "david", "group": "runtime", "modified-by-graffiti": "abc123" }} ]`)
-	actual, err := jsonpatch.FromString(string(resp.Patch))
-	assert.NoError(t, err)
-	assert.EqualValues(t, desired.Operations, actual.Operations)
-}
-
-func TestWithoutMatchingLabelSelector(t *testing.T) {
-	// create a Rule
-	rule := Rule{Matchers: Matchers{
-		LabelSelectors: []string{"author = stephen"},
-	}}
-
-	// create a review request
-	var review = admission.AdmissionReview{}
-	err := json.Unmarshal([]byte(testReview), &review)
-	assert.NoError(t, err, "couldn't marshall a valid admission review object from test json")
-
-	// call Mutate
-	resp := rule.MutateAdmission(review.Request)
-	assert.Equal(t, true, resp.Allowed, "failed rules should not block the source api request")
-	assert.Nil(t, resp.Patch)
-}
-
-func TestMatchingLabelSelector(t *testing.T) {
-	// create a Rule
-	rule := Rule{Matchers: Matchers{
-		LabelSelectors: []string{"author = david"},
-	},
-		Additions: Additions{
-			Labels: map[string]string{"modified-by-graffiti": "abc123"},
+		Payload: Payload{
+			Additions: Additions{Labels: map[string]string{"modified-by-graffiti": "abc123"}},
 		},
 	}
 
 	// create a review request
 	var review = admission.AdmissionReview{}
 	err := json.Unmarshal([]byte(testReview), &review)
-	assert.NoError(t, err, "couldn't marshall a valid admission review object from test json")
+	require.NoError(t, err, "couldn't marshall a valid admission review object from test json")
 
 	// call Mutate
 	resp := rule.MutateAdmission(review.Request)
-	assert.Equal(t, true, resp.Allowed, "the request should be successful")
+
+	assert.Equal(t, true, resp.Allowed, "failed rules should not block the source api request")
 	assert.NotNil(t, resp.Patch)
 
 	// we have to test the patch objects because they have multiple values and can be ordered either way round preventing a simple string match.
@@ -172,24 +139,6 @@ func TestMatchingLabelSelector(t *testing.T) {
 	actual, err := jsonpatch.FromString(string(resp.Patch))
 	assert.NoError(t, err)
 	assert.EqualValues(t, desired.Operations, actual.Operations)
-}
-
-func TestInvalidLabelSelector(t *testing.T) {
-	// create a Rule
-	rule := Rule{
-		Matchers:  Matchers{LabelSelectors: []string{"this is not a valid selector"}},
-		Additions: Additions{Labels: map[string]string{"modified-by-graffiti": "abc123"}},
-	}
-
-	// create a review request
-	var review = admission.AdmissionReview{}
-	err := json.Unmarshal([]byte(testReview), &review)
-	require.NoError(t, err, "couldn't marshall a valid admission review object from test json")
-
-	// call Mutate
-	resp := rule.MutateAdmission(review.Request)
-	assert.Equal(t, true, resp.Allowed, "the request should be successful")
-	assert.Nil(t, resp.Patch, "nothing is patched")
 }
 
 func TestMatchingSelectorWithoutLablesOrAnnotationsProducesNoPatch(t *testing.T) {
@@ -207,93 +156,51 @@ func TestMatchingSelectorWithoutLablesOrAnnotationsProducesNoPatch(t *testing.T)
 	assert.Nil(t, resp.Patch)
 }
 
-func TestLabelSelectorMatchesName(t *testing.T) {
+func TestHandlesNoSourceObjectLabelsOrAnnotations(t *testing.T) {
 	// create a Rule
 	rule := Rule{
-		Matchers:  Matchers{LabelSelectors: []string{"name=test-namespace"}},
-		Additions: Additions{Labels: map[string]string{"modified-by-graffiti": "abc123"}},
+		Matchers: Matchers{
+			LabelSelectors: []string{"name=test-namespace"},
+		},
+		Payload: Payload{
+			Additions: Additions{
+				Labels: map[string]string{"modified-by-graffiti": "abc123"},
+			},
+		},
 	}
 
-	// create a review request
-	var review = admission.AdmissionReview{}
-	err := json.Unmarshal([]byte(testReview), &review)
-	require.NoError(t, err, "couldn't marshall a valid admission review object from test json")
-
-	// call Mutate
-	resp := rule.MutateAdmission(review.Request)
-	assert.Equal(t, true, resp.Allowed, "the request should be successful")
-	assert.NotNil(t, resp.Patch)
-
-	// we have to test the patch objects because they have multiple values and can be ordered either way round preventing a simple string match.
-	desired, _ := jsonpatch.FromString(`[ { "op": "replace", "path": "/metadata/labels", "value": { "modified-by-graffiti": "abc123", "group": "runtime", "author": "david" }} ]`)
-	actual, err := jsonpatch.FromString(string(resp.Patch))
-	assert.NoError(t, err)
-	assert.EqualValues(t, desired.Operations, actual.Operations)
-}
-
-func TestMultipleLabelSelectorsAreORed(t *testing.T) {
-	// create a Rule
-	rule := Rule{
-		Matchers:  Matchers{LabelSelectors: []string{"name=not-a-name-that-matches", "author = david"}},
-		Additions: Additions{Labels: map[string]string{"modified-by-graffiti": "abc123"}},
-	}
-
-	// create a review request
-	var review = admission.AdmissionReview{}
-	err := json.Unmarshal([]byte(testReview), &review)
-	require.NoError(t, err, "couldn't marshall a valid admission review object from test json")
-
-	// call Mutate
-	resp := rule.MutateAdmission(review.Request)
-	assert.Equal(t, true, resp.Allowed, "the request should be successful")
-	assert.NotNil(t, resp.Patch)
-
-	// we have to test the patch objects because they have multiple values and can be ordered either way round preventing a simple string match.
-	desired, _ := jsonpatch.FromString(`[ { "op": "replace", "path": "/metadata/labels", "value": { "author": "david", "group": "runtime", "modified-by-graffiti": "abc123" }} ]`)
-	actual, err := jsonpatch.FromString(string(resp.Patch))
-	assert.NoError(t, err)
-	assert.EqualValues(t, desired.Operations, actual.Operations)
-}
-
-func TestHandlesNoSourceObjectLabels(t *testing.T) {
-	// create a Rule
-	rule := Rule{
-		Matchers:  Matchers{LabelSelectors: []string{"name=test-namespace"}},
-		Additions: Additions{Labels: map[string]string{"modified-by-graffiti": "abc123"}},
-	}
-
-	var noLabels = `{  
+	var noLabels = `{
 		"kind":"AdmissionReview",
 		"apiVersion":"admission.k8s.io/v1beta1",
-		"request":{  
+		"request":{
 		   "uid":"69f7d25a-963e-11e8-a77c-08002753edac",
-		   "kind":{  
+		   "kind":{
 			  "group":"",
 			  "version":"v1",
 			  "kind":"Namespace"
 		   },
-		   "resource":{  
+		   "resource":{
 			  "group":"",
 			  "version":"v1",
 			  "resource":"namespaces"
 		   },
 		   "operation":"CREATE",
-		   "userInfo":{  
+		   "userInfo":{
 			  "username":"minikube-user",
-			  "groups":[  
+			  "groups":[
 				 "system:masters",
 				 "system:authenticated"
 			  ]
 		   },
-		   "object":{  
-			  "metadata":{  
+		   "object":{
+			  "metadata":{
 				 "name":"test-namespace",
 				 "creationTimestamp":null
 			  },
-			  "spec":{  
-	 
+			  "spec":{
+
 			  },
-			  "status":{  
+			  "status":{
 				 "phase":"Active"
 			  }
 		   },
@@ -313,426 +220,31 @@ func TestHandlesNoSourceObjectLabels(t *testing.T) {
 	assert.Equal(t, `[ { "op": "add", "path": "/metadata/labels", "value": { "modified-by-graffiti": "abc123" }} ]`, string(resp.Patch))
 }
 
-func TestSimpleFieldSelectorMiss(t *testing.T) {
-	// create a Rule
-	rule := Rule{
-		Matchers: Matchers{
-			FieldSelectors: []string{"author = david"},
-		},
-		Additions: Additions{
-			Labels:      map[string]string{"modified-by-graffiti": "abc123"},
-			Annotations: map[string]string{"flash": "saviour of the universe"},
-		},
-	}
-
-	// create a review request
-	var review = admission.AdmissionReview{}
-	err := json.Unmarshal([]byte(testReview), &review)
-	assert.NoError(t, err, "couldn't marshall a valid admission review object from test json")
-
-	// call Mutate
-	resp := rule.MutateAdmission(review.Request)
-	assert.Equal(t, true, resp.Allowed, "the request should be successful")
-	assert.Nil(t, resp.Patch)
-}
-
-func TestMatchingSimpleFieldSelectorHit(t *testing.T) {
-	// create a Rule
-	rule := Rule{
-		Matchers: Matchers{FieldSelectors: []string{"metadata.annotations.level=v.special"}},
-		Additions: Additions{
-			Labels:      map[string]string{"modified-by-graffiti": "abc123"},
-			Annotations: map[string]string{"flash": "saviour of the universe"},
-		},
-	}
-
-	// create a review request
-	var review = admission.AdmissionReview{}
-	err := json.Unmarshal([]byte(testReview), &review)
-	assert.NoError(t, err, "couldn't marshall a valid admission review object from test json")
-
-	// call Mutate
-	resp := rule.MutateAdmission(review.Request)
-	assert.Equal(t, true, resp.Allowed, "the request should be successful")
-	assert.NotNil(t, resp.Patch)
-
-	// we have to test the patch objects because they have multiple values and can be ordered either way round preventing a simple string match.
-	desired, _ := jsonpatch.FromString(`[ { "op": "replace", "path": "/metadata/labels", "value": { "group": "runtime", "modified-by-graffiti": "abc123", "author": "david" }}, { "op": "replace", "path": "/metadata/annotations", "value": { "prometheus.io/path": "/metrics", "level": "v.special", "flash": "saviour of the universe" }} ]`)
-	actual, err := jsonpatch.FromString(string(resp.Patch))
-	assert.NoError(t, err)
-	assert.EqualValues(t, desired.Operations, actual.Operations)
-}
-
-func TestMatchingNegativeSimpleFieldSelector(t *testing.T) {
-	// create a Rule
-	rule := Rule{
-		Matchers: Matchers{FieldSelectors: []string{"metadata.annotations.level!=elvis"}},
-		Additions: Additions{
-			Labels:      map[string]string{"modified-by-graffiti": "abc123"},
-			Annotations: map[string]string{"flash": "saviour of the universe"},
-		},
-	}
-
-	// create a review request
-	var review = admission.AdmissionReview{}
-	err := json.Unmarshal([]byte(testReview), &review)
-	assert.NoError(t, err, "couldn't marshall a valid admission review object from test json")
-
-	// call Mutate
-	resp := rule.MutateAdmission(review.Request)
-	assert.Equal(t, true, resp.Allowed, "the request should be successful")
-	assert.NotNil(t, resp.Patch)
-
-	// we have to test the patch objects because they have multiple values and can be ordered either way round preventing a simple string match.
-	desired, _ := jsonpatch.FromString(`[ { "op": "replace", "path": "/metadata/labels", "value": { "group": "runtime", "author": "david", "modified-by-graffiti": "abc123" }}, { "op": "replace", "path": "/metadata/annotations", "value": { "level": "v.special", "prometheus.io/path": "/metrics", "flash": "saviour of the universe" }} ]`)
-	actual, err := jsonpatch.FromString(string(resp.Patch))
-	assert.NoError(t, err)
-	assert.ElementsMatch(t, desired.Operations, actual.Operations)
-}
-
-func TestSuccessfullCombinedFieldSelector(t *testing.T) {
-	// create a Rule
-	rule := Rule{
-		Matchers: Matchers{FieldSelectors: []string{"status.phase=Active,metadata.annotations.level=v.special"}},
-		Additions: Additions{
-			Labels:      map[string]string{"modified-by-graffiti": "abc123"},
-			Annotations: map[string]string{"flash": "saviour of the universe"},
-		},
-	}
-
-	// create a review request
-	var review = admission.AdmissionReview{}
-	err := json.Unmarshal([]byte(testReview), &review)
-	assert.NoError(t, err, "couldn't marshall a valid admission review object from test json")
-
-	// call Mutate
-	resp := rule.MutateAdmission(review.Request)
-	assert.Equal(t, true, resp.Allowed, "the request should be successful")
-	assert.NotNil(t, resp.Patch)
-
-	// we have to test the patch objects because they have multiple values and can be ordered either way round preventing a simple string match.
-	desired, _ := jsonpatch.FromString(`[ { "op": "replace", "path": "/metadata/labels", "value": { "author": "david", "group": "runtime", "modified-by-graffiti": "abc123" }}, { "op": "replace", "path": "/metadata/annotations", "value": { "level": "v.special", "flash": "saviour of the universe", "prometheus.io/path": "/metrics" }} ]`)
-	actual, err := jsonpatch.FromString(string(resp.Patch))
-	assert.NoError(t, err)
-	assert.ElementsMatch(t, desired.Operations, actual.Operations)
-}
-
-func TestCombinedFieldSelectorShouldANDTheCommaSeparatedSelectors(t *testing.T) {
-	// create a Rule
-	rule := Rule{
-		Matchers: Matchers{FieldSelectors: []string{"status.phase=Active,metadata.annotations.level=not-very-special"}},
-		Additions: Additions{
-			Labels:      map[string]string{"modified-by-graffiti": "abc123"},
-			Annotations: map[string]string{"flash": "saviour of the universe"},
-		},
-	}
-
-	// create a review request
-	var review = admission.AdmissionReview{}
-	err := json.Unmarshal([]byte(testReview), &review)
-	assert.NoError(t, err, "couldn't marshall a valid admission review object from test json")
-
-	// call Mutate
-	resp := rule.MutateAdmission(review.Request)
-	assert.Equal(t, true, resp.Allowed, "the request should be successful")
-	assert.Nil(t, resp.Patch)
-}
-
-func TestInvalidFieldSelector(t *testing.T) {
-	// create a Rule
-	rule := Rule{
-		Matchers:  Matchers{FieldSelectors: []string{"this is not a valid selector"}},
-		Additions: Additions{Labels: map[string]string{"modified-by-graffiti": "abc123"}},
-	}
-
-	// create a review request
-	var review = admission.AdmissionReview{}
-	err := json.Unmarshal([]byte(testReview), &review)
-	require.NoError(t, err, "couldn't marshall a valid admission review object from test json")
-
-	// call Mutate
-	resp := rule.MutateAdmission(review.Request)
-	assert.Equal(t, true, resp.Allowed, "the request should be successful")
-	assert.Nil(t, resp.Patch, "nothing is patched")
-}
-
-func TestORMultipleFieldSelectors(t *testing.T) {
-	// create a Rule
-	rule := Rule{
-		Matchers: Matchers{FieldSelectors: []string{"metadata.name=not-matching", "status.phase=Active"}},
-		Additions: Additions{
-			Labels:      map[string]string{"modified-by-graffiti": "abc123"},
-			Annotations: map[string]string{"flash": "saviour of the universe"},
-		},
-	}
-
-	// create a review request
-	var review = admission.AdmissionReview{}
-	err := json.Unmarshal([]byte(testReview), &review)
-	assert.NoError(t, err, "couldn't marshall a valid admission review object from test json")
-
-	// call Mutate
-	resp := rule.MutateAdmission(review.Request)
-	assert.Equal(t, true, resp.Allowed, "the request should be successful")
-	assert.NotNil(t, resp.Patch)
-
-	// we have to test the patch objects because they have multiple values and can be ordered either way round preventing a simple string match.
-	desired, _ := jsonpatch.FromString(`[ { "op": "replace", "path": "/metadata/labels", "value": { "author": "david", "group": "runtime", "modified-by-graffiti": "abc123" }}, { "op": "replace", "path": "/metadata/annotations", "value": { "level": "v.special", "prometheus.io/path": "/metrics", "flash": "saviour of the universe" }} ]`)
-	actual, err := jsonpatch.FromString(string(resp.Patch))
-	assert.NoError(t, err)
-	assert.ElementsMatch(t, desired.Operations, actual.Operations)
-}
-
-func TestMatchingComplexFieldSelectorHit(t *testing.T) {
-	// create a Rule
-	rule := Rule{
-		Matchers: Matchers{FieldSelectors: []string{"metadata.annotations.prometheus.io/path=/metrics"}},
-		Additions: Additions{
-			Labels:      map[string]string{"modified-by-graffiti": "abc123"},
-			Annotations: map[string]string{"flash": "saviour of the universe"},
-		},
-	}
-
-	// create a review request
-	var review = admission.AdmissionReview{}
-	err := json.Unmarshal([]byte(testReview), &review)
-	assert.NoError(t, err, "couldn't marshall a valid admission review object from test json")
-
-	// call Mutate
-	resp := rule.MutateAdmission(review.Request)
-	assert.Equal(t, true, resp.Allowed, "the request should be successful")
-	assert.NotNil(t, resp.Patch)
-
-	// we have to test the patch objects because they have multiple values and can be ordered either way round preventing a simple string match.
-	desired, _ := jsonpatch.FromString(`[ { "op": "replace", "path": "/metadata/labels", "value": { "group": "runtime", "modified-by-graffiti": "abc123", "author": "david" }}, { "op": "replace", "path": "/metadata/annotations", "value": { "level": "v.special", "prometheus.io/path": "/metrics", "flash": "saviour of the universe" }} ]`)
-	actual, err := jsonpatch.FromString(string(resp.Patch))
-	assert.NoError(t, err)
-	assert.ElementsMatch(t, desired.Operations, actual.Operations)
-}
-
-func TestLabelAndFieldSelectorsANDTogetherByDefault(t *testing.T) {
-	// create a Rule
-	rule := Rule{
-		Matchers: Matchers{
-			LabelSelectors: []string{"a-label=which-will-not-match"},
-			FieldSelectors: []string{"metadata.annotations.prometheus.io/path=/metrics"},
-		},
-		Additions: Additions{
-			Labels:      map[string]string{"modified-by-graffiti": "abc123"},
-			Annotations: map[string]string{"flash": "saviour of the universe"},
-		},
-	}
-
-	// create a review request
-	var review = admission.AdmissionReview{}
-	err := json.Unmarshal([]byte(testReview), &review)
-	assert.NoError(t, err, "couldn't marshall a valid admission review object from test json")
-
-	// call Mutate
-	resp := rule.MutateAdmission(review.Request)
-	assert.Equal(t, true, resp.Allowed, "the request should be successful")
-	assert.Nil(t, resp.Patch)
-}
-
-func TestLabelAndFieldSelectorsANDSpecified(t *testing.T) {
-	// create a Rule
-	rule := Rule{
-		Matchers: Matchers{
-			LabelSelectors:  []string{"a-label=which-will-not-match"},
-			FieldSelectors:  []string{"metadata.annotations.prometheus.io/path=/metrics"},
-			BooleanOperator: AND,
-		},
-		Additions: Additions{
-			Labels:      map[string]string{"modified-by-graffiti": "abc123"},
-			Annotations: map[string]string{"flash": "saviour of the universe"},
-		},
-	}
-
-	// create a review request
-	var review = admission.AdmissionReview{}
-	err := json.Unmarshal([]byte(testReview), &review)
-	assert.NoError(t, err, "couldn't marshall a valid admission review object from test json")
-
-	// call Mutate
-	resp := rule.MutateAdmission(review.Request)
-	assert.Equal(t, true, resp.Allowed, "the request should be successful")
-	assert.Nil(t, resp.Patch)
-}
-
-// If a selector is not specified we want to match on the single selector therefore a match ANDed with an empty selector should always be true!
-func TestAnEmptySelectorAlwaysMatchesWithAND(t *testing.T) {
-	// create a Rule
-	rule := Rule{
-		Matchers: Matchers{
-			LabelSelectors:  []string{"name=test-namespace"},
-			FieldSelectors:  []string{},
-			BooleanOperator: AND,
-		},
-		Additions: Additions{
-			Labels:      map[string]string{"modified-by-graffiti": "abc123"},
-			Annotations: map[string]string{"flash": "saviour of the universe"},
-		},
-	}
-
-	// create a review request
-	var review = admission.AdmissionReview{}
-	err := json.Unmarshal([]byte(testReview), &review)
-	assert.NoError(t, err, "couldn't marshall a valid admission review object from test json")
-
-	// call Mutate
-	resp := rule.MutateAdmission(review.Request)
-	assert.Equal(t, true, resp.Allowed, "the request should be successful")
-	assert.NotNil(t, resp.Patch)
-	// we have to test the patch objects because they have multiple values and can be ordered either way round preventing a simple string match.
-	desired, _ := jsonpatch.FromString(`[ { "op": "replace", "path": "/metadata/labels", "value": { "author": "david", "group": "runtime", "modified-by-graffiti": "abc123" }}, { "op": "replace", "path": "/metadata/annotations", "value": { "prometheus.io/path": "/metrics", "level": "v.special", "flash": "saviour of the universe" }} ]`)
-	actual, err := jsonpatch.FromString(string(resp.Patch))
-	assert.NoError(t, err)
-	assert.ElementsMatch(t, desired.Operations, actual.Operations)
-}
-
-func TestLabelAndFieldSelectorsORSelected(t *testing.T) {
-	// create a Rule
-	rule := Rule{
-		Matchers: Matchers{
-			LabelSelectors:  []string{"a-label=which-will-not-match"},
-			FieldSelectors:  []string{"metadata.annotations.prometheus.io/path=/metrics"},
-			BooleanOperator: OR,
-		},
-		Additions: Additions{
-			Labels:      map[string]string{"modified-by-graffiti": "abc123"},
-			Annotations: map[string]string{"flash": "saviour of the universe"},
-		},
-	}
-
-	// create a review request
-	var review = admission.AdmissionReview{}
-	err := json.Unmarshal([]byte(testReview), &review)
-	assert.NoError(t, err, "couldn't marshall a valid admission review object from test json")
-
-	// call Mutate
-	resp := rule.MutateAdmission(review.Request)
-	assert.Equal(t, true, resp.Allowed, "the request should be successful")
-	assert.NotNil(t, resp.Patch)
-	// we have to test the patch objects because they have multiple values and can be ordered either way round preventing a simple string match.
-	desired, _ := jsonpatch.FromString(`[ { "op": "replace", "path": "/metadata/labels", "value": { "author": "david", "group": "runtime", "modified-by-graffiti": "abc123" }}, { "op": "replace", "path": "/metadata/annotations", "value": { "prometheus.io/path": "/metrics", "level": "v.special", "flash": "saviour of the universe" }} ]`)
-	actual, err := jsonpatch.FromString(string(resp.Patch))
-	assert.NoError(t, err)
-	assert.ElementsMatch(t, desired.Operations, actual.Operations)
-}
-
-// If only one selector exists then the match needs to be based on that selector alone when results are being OR'd, ie. an empty selector needs always be false.
-func TestAnEmptySelectorNeverMatchesWithOR(t *testing.T) {
-	// create a Rule
-	rule := Rule{
-		Matchers: Matchers{
-			LabelSelectors:  []string{"name=a-non-matching-label-selector"},
-			FieldSelectors:  []string{},
-			BooleanOperator: OR,
-		},
-		Additions: Additions{
-			Labels:      map[string]string{"modified-by-graffiti": "abc123"},
-			Annotations: map[string]string{"flash": "saviour of the universe"},
-		},
-	}
-
-	// create a review request
-	var review = admission.AdmissionReview{}
-	err := json.Unmarshal([]byte(testReview), &review)
-	assert.NoError(t, err, "couldn't marshall a valid admission review object from test json")
-
-	// call Mutate
-	resp := rule.MutateAdmission(review.Request)
-	assert.Equal(t, true, resp.Allowed, "the request should be successful")
-	assert.Nil(t, resp.Patch)
-}
-
-func TestLabelAndFieldSelectorsXORSelectedWithSingleMatch(t *testing.T) {
-	// create a Rule
-	rule := Rule{
-		Matchers: Matchers{
-			LabelSelectors:  []string{"a-label=which-will-not-match"},
-			FieldSelectors:  []string{"metadata.annotations.prometheus.io/path=/metrics"},
-			BooleanOperator: XOR,
-		},
-		Additions: Additions{
-			Labels:      map[string]string{"modified-by-graffiti": "abc123"},
-			Annotations: map[string]string{"flash": "saviour of the universe"},
-		},
-	}
-
-	// create a review request
-	var review = admission.AdmissionReview{}
-	err := json.Unmarshal([]byte(testReview), &review)
-	assert.NoError(t, err, "couldn't marshall a valid admission review object from test json")
-
-	// call Mutate
-	resp := rule.MutateAdmission(review.Request)
-	assert.Equal(t, true, resp.Allowed, "the request should be successful")
-	assert.NotNil(t, resp.Patch)
-	// we have to test the patch objects because they have multiple values and can be ordered either way round preventing a simple string match.
-	desired, _ := jsonpatch.FromString(`[ { "op": "replace", "path": "/metadata/labels", "value": { "author": "david", "group": "runtime", "modified-by-graffiti": "abc123" }}, { "op": "replace", "path": "/metadata/annotations", "value": { "prometheus.io/path": "/metrics", "level": "v.special", "flash": "saviour of the universe" }} ]`)
-	actual, err := jsonpatch.FromString(string(resp.Patch))
-	assert.NoError(t, err)
-	assert.ElementsMatch(t, desired.Operations, actual.Operations)
-}
-
-func TestLabelAndFieldSelectorsXORWithBothMatchedIsFalse(t *testing.T) {
-	// create a Rule
-	rule := Rule{
-		Matchers: Matchers{
-			LabelSelectors:  []string{"name=test-namespace"},
-			FieldSelectors:  []string{"metadata.annotations.prometheus.io/path=/metrics"},
-			BooleanOperator: XOR,
-		},
-		Additions: Additions{
-			Labels:      map[string]string{"modified-by-graffiti": "abc123"},
-			Annotations: map[string]string{"flash": "saviour of the universe"},
-		},
-	}
-
-	// create a review request
-	var review = admission.AdmissionReview{}
-	err := json.Unmarshal([]byte(testReview), &review)
-	assert.NoError(t, err, "couldn't marshall a valid admission review object from test json")
-
-	// call Mutate
-	resp := rule.MutateAdmission(review.Request)
-	assert.Equal(t, true, resp.Allowed, "the request should be successful")
-	assert.Nil(t, resp.Patch)
-}
-
-func TestLabelAndFieldSelectorsXORanEmptySelectorIsNotAMatch(t *testing.T) {
-	// create a Rule
-	rule := Rule{
-		Matchers: Matchers{
-			LabelSelectors:  []string{"name=test-xxx"},
-			FieldSelectors:  []string{},
-			BooleanOperator: XOR,
-		},
-		Additions: Additions{
-			Labels:      map[string]string{"modified-by-graffiti": "abc123"},
-			Annotations: map[string]string{"flash": "saviour of the universe"},
-		},
-	}
-
-	// create a review request
-	var review = admission.AdmissionReview{}
-	err := json.Unmarshal([]byte(testReview), &review)
-	assert.NoError(t, err, "couldn't marshall a valid admission review object from test json")
-
-	// call Mutate
-	resp := rule.MutateAdmission(review.Request)
-	assert.Equal(t, true, resp.Allowed, "the request should be successful")
-	assert.Nil(t, resp.Patch)
+func TestAllRulesMustHaveAPayload(t *testing.T) {
+	var source = `---
+name: "my-rule"
+matchers:
+  labelselectors:
+  - "name=test-pod"
+`
+	mylog := log.Logger
+	var rule Rule
+	err := yaml.Unmarshal([]byte(source), &rule)
+	assert.NoError(t, err, "couldn't marshall a valid rule object")
+	err = rule.Validate(mylog)
+	assert.EqualError(t, err, "rule 'my-rule' failed validation: a rule payload must specify either additions/deletions, a json-patch, or a block")
 }
 
 func TestWhenAdditionsAlreadyThereProducesNoPatch(t *testing.T) {
 	// create a Rule
-	rule := Rule{Matchers: Matchers{
-		LabelSelectors: []string{"author = david"},
-	},
-		Additions: Additions{
-			Labels: map[string]string{"author": "david"},
+	rule := Rule{
+		Matchers: Matchers{
+			LabelSelectors: []string{"author = david"},
+		},
+		Payload: Payload{
+			Additions: Additions{
+				Labels: map[string]string{"author": "david"},
+			},
 		},
 	}
 

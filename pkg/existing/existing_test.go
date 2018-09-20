@@ -342,9 +342,10 @@ registration:
 matchers:
   label-selectors:
   - "fruit=apple"
-additions:
-  labels:
-    added: 'by-graffiti'
+payload:
+  additions:
+    labels:
+      added: 'by-graffiti'
 `
 	var rule config.Rule
 	err := yaml.Unmarshal([]byte(ruleYaml), &rule)
@@ -411,9 +412,10 @@ registration:
 matchers:
   label-selectors:
   - "fruit=banana"
-additions:
-  labels:
-    added: 'by-graffiti'
+payload:
+  additions:
+    labels:
+      added: 'by-graffiti'
 `
 	var rule config.Rule
 	err := yaml.Unmarshal([]byte(ruleYaml), &rule)
@@ -468,9 +470,10 @@ registration:
 matchers:
   label-selectors:
   - "fruit=apple"
-additions:
-  labels:
-    added: 'by-graffiti'
+payload:
+  additions:
+    labels:
+      added: 'by-graffiti'
 `
 	var rule config.Rule
 	err := yaml.Unmarshal([]byte(ruleYaml), &rule)
@@ -606,9 +609,10 @@ registration:
 matchers:
   label-selectors:
   - "run=nginx"
-additions:
-  labels:
-    added: 'by-graffiti'
+payload:
+  additions:
+    labels:
+      added: 'by-graffiti'
 `
 	var rule config.Rule
 	err := yaml.Unmarshal([]byte(ruleYaml), &rule)
@@ -747,9 +751,10 @@ registration:
 matchers:
   label-selectors:
   - "run=nginx"
-additions:
-  labels:
-    added: 'by-graffiti'
+payload:
+  additions:
+    labels:
+      added: 'by-graffiti'
 `
 	var rule config.Rule
 	err := yaml.Unmarshal([]byte(ruleYaml), &rule)
@@ -991,9 +996,10 @@ func TestTraverseKubePatchingAllNamespaces(t *testing.T) {
   matchers:
     label-selectors:
     - "fruit=apple"
-  additions:
-    labels:
-      added: 'by-graffiti'
+  payload:
+    additions:
+      labels:
+        added: 'by-graffiti'
 `
 	var rules []config.Rule
 	err := yaml.Unmarshal([]byte(rulesYaml), &rules)
@@ -1148,9 +1154,10 @@ func TestTraverseKubePatchingAllNamespacesWildcardsInRegistration(t *testing.T) 
   matchers:
     label-selectors:
     - "fruit=apple"
-  additions:
-    labels:
-      added: 'by-graffiti'
+  payload:
+    additions:
+      labels:
+        added: 'by-graffiti'
 `
 	var rules []config.Rule
 	err := yaml.Unmarshal([]byte(rulesYaml), &rules)

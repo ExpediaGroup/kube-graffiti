@@ -1,7 +1,7 @@
 kube-graffiti
 =============
 
-*kube-graffiti* is a tagger, labeller and annotator, and just like real-world graffiti artists it goes about its work without the knowledge or permission of the owners of the objects upon which it paints!  At its core, it's a convenient way of creating kubernetes mutating webhooks for adding labels or annotations.  It gives you, a way of proactively modifying objects without the need of tracking down the source files, e.g. kubectl manifests, or helm charts/values, etc.  It is useful for configuring kubernetes services, such as [Kiam](https://github.com/uswitch/kiam), [Istio](https://istio.io/docs/setup/kubernetes/sidecar-injection/#automatic-sidecar-injection), [Network Policy](https://kubernetes.io/docs/concepts/services-networking/network-policies/) or anything else that requires labels or annotations. 
+*kube-graffiti* is a tagger, labeller, annotator, patcher and blocker - at its core it's a convenient way of creating kubernetes mutating webhooks and modifying kubernetes objects on-the-fly as they are either created or updated.  It allows kubernetes cluster admins to modify arbitary objects without needing access to lots of different source files, e.g. kubernetes manifests, or helm charts/values, etc.  It is very useful for enabling or configuring various kubernetes services, such as [Kiam](https://github.com/uswitch/kiam), [Istio](https://istio.io/docs/setup/kubernetes/sidecar-injection/#automatic-sidecar-injection), [Network Policy](https://kubernetes.io/docs/concepts/services-networking/network-policies/) or anything else where it is useful to add labels or annotations.  You write rules that match against the kubernetes apis, versions and resources, object labels or field contents and then specify a payload, which could be the addition or deletion of lables or annotations, a specfic JSON patch, or just block the object from being created/updated.
 
 **A few example use-cases:-**
 
@@ -9,6 +9,7 @@ kube-graffiti
 2. Label specific namespaces and/or pods to enable [Istio side-car injection](https://istio.io/docs/setup/kubernetes/sidecar-injection/#automatic-sidecar-injection).
 3. Add "name" labels to namespaces, e.g. for using the namespace name within namespace selectors for [Network Policy](https://kubernetes.io/docs/concepts/services-networking/network-policies/) or [Admission Registration](https://kubernetes.io/docs/reference/access-authn-authz/extensible-admission-controllers/) (webhooks).
 4. Add ownership annotations to groups of objects in a similar way that security teams like to have tags on AWS resources.
+5. Block certain deployments containing a specific docker image or other deployment specifications.
 
 *kube-graffiti* can paint **any** kubernetes object that contains metadata (which I think is possibly all of them at the time of writing this readme).  It uses its own rules to determine whether to paint an object, or not, and to specify what to add.  It works by registering a number of [mutating webhooks](https://kubernetes.io/docs/reference/access-authn-authz/extensible-admission-controllers/) (one per rule) with the kubernetes apiserver and matches incoming new or updated object requests before generating a json patch containing the desired additions if the rule matched.  It needs and expects to be running within a kubernetes cluster and must have been given adequate rbac permissions (see "kubernetes rbac access" section below). 
 
@@ -36,9 +37,10 @@ rules:
   matchers:
     label-selectors:
     - "name notin (kube-system,kube-public,default)"
-  additions:
-    labels:
-      istio-injection: enabled
+  payload:
+    additions:
+      labels:
+        istio-injection: enabled
 ```
 *note* - 'name' and 'namespace' metadata fields can be used as though they are labels in our label-selectors.
 
@@ -63,9 +65,10 @@ rules:
     - "metadata.name=team-a"
     - "metadata.name=team-b"
     - "metadata.name=team-c"
-  additions:
-    annotations:
-      iam.amazonaws.com/permitted: ".*"
+  payload:
+    additions:
+      annotations:
+        iam.amazonaws.com/permitted: ".*"
 ```
 *note1* - a list of matcher label or field selectors are evaluated as an logical **OR**, and comma separated selectors within a single selector is treated as a logical **AND**
 
@@ -85,9 +88,10 @@ rules:
       resources:
       - namespaces
     failure-policy: Ignore
-  additions:
-    labels:
-      name: '{{ index . "metadata.name" }}'
+  payload:
+    additions:
+      labels:
+        name: '{{ index . "metadata.name" }}'
 ```
 *note1* - a rule without any matcher section will match **ALL**
 *note2* - addition values can be golang templates (but not keys)
@@ -109,9 +113,10 @@ rules:
       resources:
       - namespaces
     failure-policy: Ignore
-  additions:
-    labels:
-      name: '{{ index . "metadata.name" }}'
+  payload:
+    additions:
+      labels:
+        name: '{{ index . "metadata.name" }}'
 - registration:
     name: magic-mobile-team-ownership-annotations
     targets:
@@ -127,16 +132,44 @@ rules:
       - ingresses
     namespace-selector: name = mobile-team
     failure-policy: Ignore
-  additions:
-    labels:
-      owner: "Stephanie Jobs"
-      security-zone: "alpha"
-      contact: "mobileteam@mycorp.com"
-      wiki: "http://wiki.mycorp.com/mobile-team"
+  payload:
+    additions:
+      labels:
+        owner: "Stephanie Jobs"
+        security-zone: "alpha"
+        contact: "mobileteam@mycorp.com"
+        wiki: "http://wiki.mycorp.com/mobile-team"
 ```
 *note1* - this uses the namespace-selector within the registration to pass only objects within the 'mobile-team' namespace to the *kube-graffiti* webhook.
 *note2* - the 'add-name-label-to-namespaces' rule has been added to provide the required name label on the namespace.
 *note3* - there are other ways of matching namespaces, such as using a label-selector or field-selector in the matcher rule, and these will work, but will result in more objects being passed through the *kube-graffiti* webhooks for evaluation, which can impact on cluster performance.
+
+**Blocking an deployment, pod, job**
+
+Note, there are other ways to do this - you should take a look at [ImagePolicyWebhook](https://kubernetes.io/docs/reference/access-authn-authz/admission-controllers/#imagepolicywebhook).  This demonstrates what you could do, remembering that you have api, version, resource-type, namespace-selector, label-selector and field-selectors to use to pin the object you want to target using the value of just about **any** field.
+
+```
+- registration:
+    name: block-specific-deploy-in-mobile-team
+    targets:
+    - api-groups:
+      - "*"
+      api-versions:
+      - "*"
+      resources:
+      - pods
+      - deployments
+    namespace-selector: name = mobile-team
+    failure-policy: Ignore
+  matchers:
+    field-selectors:
+    - spec.template.spec.containers.0.image=nginx
+  payload:
+    block: true
+      labels:
+```
+
+*note1* - field selectors do not allow spaces around the '=' whereas label and namespace selectors are completely happy with them..
 
 Configuration
 -------------
@@ -184,9 +217,9 @@ You need to have at least one rule in your configuration and can scale to as man
 
 A graffiti rule is made up of three parts:-
 
-* registration - responsible for registering the rule as a mutating webhook.
-* matcher - responsible for matching/evaluating the object to decide whether we paint it or not.
-* additions - the labels or annotations we will add to the object if it matcher rules match.
+* **registration** - responsible for registering the rule as a mutating webhook.
+* **matcher** - responsible for matching/evaluating the object to decide whether we paint it or not.
+* **payload** - contains the changes that you want to make to the object
 
 The rules are validated at start up and *kube-graffiti* will fail-fast if it finds any problems, check the logs to make sure you haven't entered any invalid selectors, labels or annotations.
 
@@ -221,11 +254,17 @@ Each rule can contain a single **namespace-selector** which can be used to furth
     label-selectors:
     - "name in (app-a,app-b,app-c)"
     field.selectors:
-    - "spec.serviceAccountName = bob"
+    - "spec.serviceAccountName=bob"
     boolean-operator: AND
 ```
 
 Matchers take the incoming object and apply boolean logic to decide whether or not we will paint it with our additions.  You can use [kubernetes label selectors](https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/#label-selectors), [field selectors](https://kubernetes.io/docs/concepts/overview/working-with-objects/field-selectors/) or a combination of the two.
+
+**WARNING - please note that field selectors will not correctly match if you put spaces around the '='s: -**
+```
+x 'field = value' - WILL NOT match
+✔ 'field=value'- WILL match
+```
 
 Both field and label selectors allow you to use commas ',' to specify multiple expressions which are AND'ed together to form the result, e.g.
 
@@ -317,27 +356,103 @@ Unfortunately, at this time, neither label or field selectors support regex matc
 
 By default, both label-selectors AND field-selectors must match the object, *where they are specified*, for the result to be true.  This means that the result is effectively an AND when both selectors are set and an OR if only one selector is (with unset one evaluating to false).  If you omit both matchers then the result will **always** be true (this means anything matching the registration rule will always be painted).  You can change the logical operator used to combine results of the label and field selectors using the boolean-operator setting, from the default "AND" to "OR" or "XOR".  I have no idea of a real-world use-case for XOR but I think that OR may prove useful to someone.
 
+**Payload**
+
+The payload section allows you to: -
+
+* add labels or annotations by specifying **additions**
+* delete labels or annotations by specifying **deletions**
+* provide your own json patch to the object with **json-patch**
+* block the object with **block**
+
+Each graffiti rule must contain multiple label/annotations additions or deletions, a single json-patch or a single block.  You **can not** mix a combination of labels/annotations changes, json-patches and block. 
+
 **Additions**
 
 ```
-  additions:
-    labels:
-        istio-injection: enabled
-    annotations:
-        iam.amazonaws.com/permitted: ".*"
+  payload:
+    additions:
+      labels:
+          istio-injection: enabled
+      annotations:
+          iam.amazonaws.com/permitted: ".*"
 ```
 
-Additions are the payload part of each graffiti rule, these are the things that get added into a matching object.  *kube-graffiti* supports the adding of lists of labels and annotations.  Each *kube-graffiti* rule must contain at least one addition, and each must conform to the syntax of either labels or annotations.  The above example add both a label and an annotation.
+*kube-graffiti* supports the adding of lists of labels and annotations.  All additions must conform to the corresponding syntax of either labels or annotations.  The above example adds both a label and an annotation.
 
-The value of a label or annotation can contain [golang template](https://golang.org/pkg/text/template/) annotations which allows a limited construction of values from the fields of the source object.  The flatten object map that was described in the 'Matchers' section which is a golang map[string]string is available as the context to the template and can be referrenced using golang template's 'index' function.
+The value of a label or annotation can contain [golang template](https://golang.org/pkg/text/template/) annotations which allows a limited construction of values from the fields of the source object.  The flattened object map (that was described in the 'Matchers' section and which is a golang map[string]string) is available as the context to the template and can be referrenced using golang template's 'index' function.
 
 Here's an example of combining a pods name with its uid in order to create a sort of asset tag kind of thing:-
 
 ```
-  additions:
-    labels:
-      asset-tag: 'pod/prod/k8s/{{ index . "metadata.namespace"}}/{{ index . "metadata.name" }}/{{ index . "metadata.uid" }}'
+  payload:
+    additions:
+      labels:
+        asset-tag: 'pod/prod/k8s/{{ index . "metadata.namespace"}}/{{ index . "metadata.name" }}/{{ index . "metadata.uid" }}'
 ```
+
+**Deletions**
+
+```
+  payload:
+    deletions:
+      labels:
+      - istio-injection
+      annotations:
+      - iam.amazonaws.com/permitted: ".*"
+```
+
+We all make mistakes, especically when given a tool that can spray lots of new labels and annotations all over your kubernetes objects!  Deletions are a list of either label or annotation keys that you would like to remove from the object.  They get processed after any additions are applied and they are useful for applying against existing objects.  It is perfectly fine to have rules with only additions, deletions or a mixture of the two.
+
+**Block**
+
+Under certain circumstances it *might* be convenient to use kube-graffiti to block the creation/update of certain objects.  It has to be said that [kubernetes RBAC](https://kubernetes.io/docs/reference/access-authn-authz/rbac/) is absolutely the **right** way of limiting who can do what in your clusters, and if you want to limit the amount of something then [resource quotas](https://kubernetes.io/docs/concepts/policy/resource-quotas/) are what you want.  But, given that kube-graffiti has a rich collection of targetting and selectors, you may find it useful for temporarily blocking a bad-actor or errant process from running amok whilst you work out a better solution!
+
+In this arbitary example we'll choose to stop anyone creating or updating any namespaces: -
+
+```
+rules:
+- registration:
+    name: no-more-namespaces
+    targets:
+    - api-groups:
+      - ""
+      api-versions:
+      - v1
+      resources:
+      - namespaces
+    failure-policy: Ignore
+  payload:
+    block: true
+```
+
+When you try to create a namespace (with this rule running) you'll see your request refused: -
+
+```
+$ ks create namespace please
+Error from server (InternalError): Internal error occurred: admission webhook "no-more-namespaces.acme.com" denied the request: blocked by kube-graffiti rule: no-more-namespaces
+```
+
+**JSON-Patch (advanced)**
+
+Want to update something in an object other than the labels or annotations?  You can do it by specifying your own [json patch](http://jsonpatch.com/) which can alter **any** part of the object you desire - which could be altering container images, changing secrets, environment variables, perhaps patching a deployment to add anti-affinity rules, or certain tolerations ... there's a long list of possible uses (and abuses!)  This is a low-level, powerful and rather dangerous feature so I would encourage careful testing of your rules containing json-patches in safe environment before you try them on any cluster that you care about!
+
+```
+rules:
+- registration:
+    name: the-end-of-all-metadata
+    targets:
+    - api-groups:
+      - "*"
+      api-versions:
+      - "*"
+      resources:
+      - "*"
+  payload:
+    json-patch: "[ { \"op\": \"delete\", \"path\": \"/metadata/labels\" } ]"
+```
+
+*note* - an example of an **extremely dangerous** rule!
 
 kubernetes RBAC rules
 ---------------------

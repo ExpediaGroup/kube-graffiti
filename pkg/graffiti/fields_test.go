@@ -71,8 +71,8 @@ func TestMapsAreReferencedByKey(t *testing.T) {
 }
 
 func TestComplexObject(t *testing.T) {
-	var testJSON = `{  
-		"metadata":{  
+	var testJSON = `{
+		"metadata":{
 			"name":"test-namespace",
 			"creationTimestamp":null,
 			"labels":{
@@ -85,7 +85,7 @@ func TestComplexObject(t *testing.T) {
 			}
 		},
 		"spec":{},
-		"status":{  
+		"status":{
 			"phase":"Active"
 		}
 	 }`

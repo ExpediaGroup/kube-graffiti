@@ -8,54 +8,37 @@ import (
 	"text/template"
 )
 
-// createJSONPatch will generate a JSON patch for replacing an objects labels and/or annotations
-// It is designed to replace the whole path in order to work around a bug in kubernetes that does not correctly
-// unescape ~1 (/) in paths preventing annotation labels with slashes in them.
-func (r Rule) createObjectPatch(obj metaObject, fm map[string]string) (string, error) {
-	var patches []string
+func createPatchOperand(src, add, fm map[string]string, del []string, path string) (string, error) {
+	modified := mergeMaps(src)
 
-	if len(r.Additions.Labels) > 0 {
-		op, err := createPatchOperand(obj.Meta.Labels, r.Additions.Labels, fm, "/metadata/labels")
+	// first process any additions into modified map
+	if len(add) > 0 {
+		rendered, err := renderMapValues(add, fm)
 		if err != nil {
 			return "", err
 		}
-		if op != "" {
-			patches = append(patches, op)
+		modified = mergeMaps(src, rendered)
+	}
+
+	// then process any deletions into modified map
+	if len(del) > 0 {
+		for _, d := range del {
+			if _, ok := modified[d]; ok {
+				delete(modified, d)
+			}
 		}
 	}
 
-	if len(r.Additions.Annotations) > 0 {
-		op, err := createPatchOperand(obj.Meta.Annotations, r.Additions.Annotations, fm, "/metadata/annotations")
-		if err != nil {
-			return "", err
-		}
-		if op != "" {
-			patches = append(patches, op)
-		}
-	}
-
-	if len(patches) == 0 {
-		return "", nil
-	}
-	return `[ ` + strings.Join(patches, ", ") + ` ]`, nil
-}
-
-func createPatchOperand(src, additions, fm map[string]string, path string) (string, error) {
-	if len(additions) == 0 {
-		return "", nil
-	}
-
-	rendered, err := renderMapValues(additions, fm)
-	if err != nil {
-		return "", err
-	}
-
-	modified := mergeMaps(src, rendered)
 	// don't produce a patch when there are no changes
 	if reflect.DeepEqual(src, modified) {
 		return "", nil
 	}
 
+	// when we have deleted all labels or annotations then we need to remove the whole path.
+	if len(src) > 0 && len(modified) == 0 {
+		return `{ "op": "delete", "path": "` + path + `" }`, nil
+	}
+	// we are left with new values, we need to either add a new path or replace it.
 	if len(src) == 0 {
 		return renderStringMapAsPatch("add", path, modified), nil
 	}
@@ -64,6 +47,9 @@ func createPatchOperand(src, additions, fm map[string]string, path string) (stri
 
 // renderStringMapAsPatch builds a json patch string from operand, path and a map
 func renderStringMapAsPatch(op, path string, m map[string]string) string {
+	if len(m) == 0 {
+		return ""
+	}
 	patch := `{ "op": "` + op + `", "path": "` + path + `", "value": { `
 	var values []string
 	for k, v := range m {

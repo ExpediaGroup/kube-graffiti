@@ -285,9 +285,9 @@ func applyToObject(rule *config.Rule, gv, resource string, object unstructured.U
 
 	rlog.Info().Msg("applying graffiti mutate rule to existing object")
 	gr := graffiti.Rule{
-		Name:      rule.Registration.Name,
-		Matchers:  rule.Matchers,
-		Additions: rule.Additions,
+		Name:     rule.Registration.Name,
+		Matchers: rule.Matchers,
+		Payload:  rule.Payload,
 	}
 	raw, err := json.Marshal(object.Object)
 	if err != nil {
