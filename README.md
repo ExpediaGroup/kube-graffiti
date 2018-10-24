@@ -171,6 +171,64 @@ Note, there are other ways to do this - you should take a look at [ImagePolicyWe
 
 *note1* - field selectors do not allow spaces around the '=' whereas label and namespace selectors are completely happy with them..
 
+Installation
+------------
+
+Update the `Makefile` with your docker repository (your_docker_repository) and make the kube-graffiti docker container: -
+
+```
+$ make build
+Must remake target `build'.
+Putting child 0x7fe800f00560 (build) PID 30636 on the chain.
+Live child 0x7fe800f00560 (build) PID 30636
+Sending build context to Docker daemon  213.4MB
+Step 1/11 : FROM golang:1.10 as gobuild
+ ---> d0e7a411e3da
+Step 2/11 : WORKDIR /go/src/stash.hcom/run/kube-graffiti
+ ---> Using cache
+ ---> 1e341f1aeb5e
+Step 3/11 : ENV CGO_ENABLED=0 GOOS=linux
+ ---> Using cache
+ ---> ba4426d3621b
+Step 4/11 : USER $UID
+ ---> Using cache
+ ---> 759d4faf1b6e
+Step 5/11 : COPY . .
+ ---> 40c300281261
+Step 6/11 : RUN go build -a -v
+ ---> Running in e864fe5fc3b9
+...
+Successfully built ba7f0a11d19c
+Successfully tagged hotelsdotcom/kube-graffiti:0.1.14
+```
+
+Push it to your repository: -
+
+```
+$ make push
+```
+
+To deploy via a Helm chart, first build the chart: -
+
+```
+$ make chart
+Successfully packaged chart and saved it to: .../kube-graffiti/kube-graffiti-0.7.0.tgz
+```
+
+Deploy with helm: -
+
+```
+$ helm deploy ./kube-graffiti-0.7.0.tgz --set image.repository=your_docker_repository --set image.tag=0.1.14
+```
+
+You can supply your own graffiti ruleset by creating your own package which pulls in the `kube-graffiti` chart as a requirement.  Create your own rules config map in your chart's `templates` directory and then use your `values.yaml` to override kube-graffiti with the name of your configmap: -
+
+```
+kube-graffiti:
+  enabled: true
+  configMapName: "my-alternative-config"
+```
+
 Configuration
 -------------
 
