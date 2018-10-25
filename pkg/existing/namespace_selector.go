@@ -17,8 +17,8 @@ import (
 	"errors"
 	"reflect"
 
-	"stash.hcom/run/kube-graffiti/pkg/graffiti"
-	"stash.hcom/run/kube-graffiti/pkg/log"
+	"github.com/HotelsDotCom/kube-graffiti/pkg/graffiti"
+	"github.com/HotelsDotCom/kube-graffiti/pkg/log"
 )
 
 // objectsNamespaceMatchesProvidedSelector decides whether the object/object's namespace matches the namespace selector provided.

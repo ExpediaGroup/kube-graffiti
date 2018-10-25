@@ -16,7 +16,7 @@ limitations under the License.
 package graffiti
 
 import (
-	//"stash.hcom/run/istio-namespace-webhook/pkg/log"
+	//"github.com/HotelsDotCom/istio-namespace-webhook/pkg/log"
 
 	"bytes"
 	"encoding/json"
@@ -24,10 +24,10 @@ import (
 
 	// "github.com/davecgh/go-spew/spew"
 
+	"github.com/HotelsDotCom/kube-graffiti/pkg/log"
 	"github.com/rs/zerolog"
 	admission "k8s.io/api/admission/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"stash.hcom/run/kube-graffiti/pkg/log"
 )
 
 const (

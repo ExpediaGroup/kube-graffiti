@@ -19,6 +19,10 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/HotelsDotCom/kube-graffiti/pkg/config"
+	"github.com/HotelsDotCom/kube-graffiti/pkg/graffiti"
+	"github.com/HotelsDotCom/kube-graffiti/pkg/log"
+	"github.com/HotelsDotCom/kube-graffiti/pkg/webhook"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -26,10 +30,6 @@ import (
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/rest"
-	"stash.hcom/run/kube-graffiti/pkg/config"
-	"stash.hcom/run/kube-graffiti/pkg/graffiti"
-	"stash.hcom/run/kube-graffiti/pkg/log"
-	"stash.hcom/run/kube-graffiti/pkg/webhook"
 )
 
 const (

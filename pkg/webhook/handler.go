@@ -20,9 +20,9 @@ import (
 	"io/ioutil"
 	"net/http"
 
+	"github.com/HotelsDotCom/kube-graffiti/pkg/log"
 	admission "k8s.io/api/admission/v1beta1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"stash.hcom/run/kube-graffiti/pkg/log"
 )
 
 // graffitHandler contains the context needed within our http handler without using global variables

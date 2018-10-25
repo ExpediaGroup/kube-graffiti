@@ -18,10 +18,10 @@ import (
 	"io"
 	"net/http"
 
+	"github.com/HotelsDotCom/kube-graffiti/pkg/log"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
-	"stash.hcom/run/kube-graffiti/pkg/log"
 )
 
 const componentName = "healthcheck"

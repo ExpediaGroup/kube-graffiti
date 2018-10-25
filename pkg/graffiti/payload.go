@@ -18,12 +18,12 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/HotelsDotCom/kube-graffiti/pkg/log"
 	jsonpatch "github.com/cameront/go-jsonpatch"
 	"github.com/rs/zerolog"
 	apivalidation "k8s.io/apimachinery/pkg/api/validation"
 	utilvalidation "k8s.io/apimachinery/pkg/util/validation"
 	"k8s.io/apimachinery/pkg/util/validation/field"
-	"stash.hcom/run/kube-graffiti/pkg/log"
 )
 
 // Payload contains the actions that we would like to perform when rule matches an object, such as

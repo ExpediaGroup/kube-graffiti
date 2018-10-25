@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/HotelsDotCom/kube-graffiti/pkg/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -29,7 +30,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/dynamic"
-	"stash.hcom/run/kube-graffiti/pkg/config"
 )
 
 // mockDiscoveryClient implements our apiDiscoverer interface and so allows testing of methods which call kube discovery api.

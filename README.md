@@ -184,7 +184,7 @@ Live child 0x7fe800f00560 (build) PID 30636
 Sending build context to Docker daemon  213.4MB
 Step 1/11 : FROM golang:1.10 as gobuild
  ---> d0e7a411e3da
-Step 2/11 : WORKDIR /go/src/stash.hcom/run/kube-graffiti
+Step 2/11 : WORKDIR /go/src/github.com/HotelsDotCom/kube-graffiti
  ---> Using cache
  ---> 1e341f1aeb5e
 Step 3/11 : ENV CGO_ENABLED=0 GOOS=linux

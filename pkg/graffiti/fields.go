@@ -20,7 +20,7 @@ import (
 	"reflect"
 	"strconv"
 
-	"stash.hcom/run/kube-graffiti/pkg/log"
+	"github.com/HotelsDotCom/kube-graffiti/pkg/log"
 )
 
 // makeFieldMap converts a raw json object into a compatible field map

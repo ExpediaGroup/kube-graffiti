@@ -22,17 +22,17 @@ import (
 	"strings"
 	"time"
 
+	"github.com/HotelsDotCom/kube-graffiti/pkg/config"
+	"github.com/HotelsDotCom/kube-graffiti/pkg/existing"
+	"github.com/HotelsDotCom/kube-graffiti/pkg/graffiti"
+	"github.com/HotelsDotCom/kube-graffiti/pkg/healthcheck"
+	"github.com/HotelsDotCom/kube-graffiti/pkg/log"
+	"github.com/HotelsDotCom/kube-graffiti/pkg/webhook"
 	"github.com/mitchellh/mapstructure"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
-	"stash.hcom/run/kube-graffiti/pkg/config"
-	"stash.hcom/run/kube-graffiti/pkg/existing"
-	"stash.hcom/run/kube-graffiti/pkg/graffiti"
-	"stash.hcom/run/kube-graffiti/pkg/healthcheck"
-	"stash.hcom/run/kube-graffiti/pkg/log"
-	"stash.hcom/run/kube-graffiti/pkg/webhook"
 )
 
 const (
