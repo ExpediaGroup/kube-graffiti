@@ -70,7 +70,7 @@ spec:
       - name: config
         configMap:
           {{ if eq .Values.configMapName "" -}}
-          name: {{ .Release.Name }}-default-kube-graffiti-config
+          name: {{ .Release.Name }}-kube-graffiti-config
           {{ else -}}
           name: {{ .Values.configMapName }}
           {{- end }}

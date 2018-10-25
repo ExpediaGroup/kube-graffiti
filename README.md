@@ -212,22 +212,46 @@ To deploy via a Helm chart, first build the chart: -
 
 ```
 $ make chart
-Successfully packaged chart and saved it to: .../kube-graffiti/kube-graffiti-0.7.0.tgz
+Successfully packaged chart and saved it to: .../kube-graffiti/kube-graffiti-0.8.0.tgz
 ```
 
 Deploy with helm: -
 
-```
-$ helm deploy ./kube-graffiti-0.7.0.tgz --set image.repository=your_docker_repository --set image.tag=0.1.14
-```
-
-You can supply your own graffiti ruleset by creating your own package which pulls in the `kube-graffiti` chart as a requirement.  Create your own rules config map in your chart's `templates` directory and then use your `values.yaml` to override kube-graffiti with the name of your configmap: -
+NOTE: Using the default certificates as-is is fine but you MUST deploy kube-graffiti to the namespace `kube-graffiti` with the default service name `kube-graffiti` in order for the default certificate to be valid!
 
 ```
-kube-graffiti:
-  enabled: true
-  configMapName: "my-alternative-config"
+$ helm install --namespace kube-graffiti ./kube-graffiti-0.8.0.tgz --set image.repository=your_docker_repository --set image.tag=0.1.14
 ```
+
+To define your own graffiti ruleset (or change any other chart settings) create an override yaml file (e.g. myrules.yaml), e.g.: -
+
+```
+rules:
+- registration:
+    name: my-new-rule-with-a-unique-name
+    targets:
+    - api-groups:
+      - ""
+      api-versions:
+      - v1
+      resources:
+      - namespaces
+    failure-policy: Ignore
+  payload:
+    additions:
+      labels:
+        something: "isafoot"
+```
+
+Note: I recommend that you keep the `add-name-label-to-namespaces` rule and add more rules of your own after it (because having name labels on the namespaces is very useful in targetting other rules or in setting up things like kubernetes NetworkPolicy)
+
+Then install or upgrade the chart with your values file: -
+
+```
+helm install --namespace kube-graffiti ./kube-graffiti-0.8.0.tgz --set image.repository=your_docker_repository --set image.tag=0.1.14 --values myrules.yaml
+```
+
+You can also create your own configmap and use it instead of the default one by specifying its name in the `configMapName` value.
 
 Configuration
 -------------
