@@ -335,7 +335,7 @@ Each rule can contain a single **namespace-selector** which can be used to furth
   matchers:
     label-selectors:
     - "name in (app-a,app-b,app-c)"
-    field.selectors:
+    field-selectors:
     - "spec.serviceAccountName=bob"
     boolean-operator: AND
 ```
