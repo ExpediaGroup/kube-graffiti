@@ -171,6 +171,88 @@ Note, there are other ways to do this - you should take a look at [ImagePolicyWe
 
 *note1* - field selectors do not allow spaces around the '=' whereas label and namespace selectors are completely happy with them..
 
+Installation
+------------
+
+Update the `Makefile` with your docker repository (your_docker_repository) and make the kube-graffiti docker container: -
+
+```
+$ make build
+Must remake target `build'.
+Putting child 0x7fe800f00560 (build) PID 30636 on the chain.
+Live child 0x7fe800f00560 (build) PID 30636
+Sending build context to Docker daemon  213.4MB
+Step 1/11 : FROM golang:1.10 as gobuild
+ ---> d0e7a411e3da
+Step 2/11 : WORKDIR /go/src/stash.hcom/run/kube-graffiti
+ ---> Using cache
+ ---> 1e341f1aeb5e
+Step 3/11 : ENV CGO_ENABLED=0 GOOS=linux
+ ---> Using cache
+ ---> ba4426d3621b
+Step 4/11 : USER $UID
+ ---> Using cache
+ ---> 759d4faf1b6e
+Step 5/11 : COPY . .
+ ---> 40c300281261
+Step 6/11 : RUN go build -a -v
+ ---> Running in e864fe5fc3b9
+...
+Successfully built ba7f0a11d19c
+Successfully tagged hotelsdotcom/kube-graffiti:0.1.14
+```
+
+Push it to your repository: -
+
+```
+$ make push
+```
+
+To deploy via a Helm chart, first build the chart: -
+
+```
+$ make chart
+Successfully packaged chart and saved it to: .../kube-graffiti/kube-graffiti-0.8.0.tgz
+```
+
+Deploy with helm: -
+
+NOTE: Using the default certificates as-is is fine but you MUST deploy kube-graffiti to the namespace `kube-graffiti` with the default service name `kube-graffiti` in order for the default certificate to be valid!
+
+```
+$ helm install --namespace kube-graffiti ./kube-graffiti-0.8.0.tgz --set image.repository=your_docker_repository --set image.tag=0.1.14
+```
+
+To define your own graffiti ruleset (or change any other chart settings) create an override yaml file (e.g. myrules.yaml), e.g.: -
+
+```
+rules:
+- registration:
+    name: my-new-rule-with-a-unique-name
+    targets:
+    - api-groups:
+      - ""
+      api-versions:
+      - v1
+      resources:
+      - namespaces
+    failure-policy: Ignore
+  payload:
+    additions:
+      labels:
+        something: "isafoot"
+```
+
+Note: I recommend that you keep the `add-name-label-to-namespaces` rule and add more rules of your own after it (because having name labels on the namespaces is very useful in targetting other rules or in setting up things like kubernetes NetworkPolicy)
+
+Then install or upgrade the chart with your values file: -
+
+```
+helm install --namespace kube-graffiti ./kube-graffiti-0.8.0.tgz --set image.repository=your_docker_repository --set image.tag=0.1.14 --values myrules.yaml
+```
+
+You can also create your own configmap and use it instead of the default one by specifying its name in the `configMapName` value.
+
 Configuration
 -------------
 

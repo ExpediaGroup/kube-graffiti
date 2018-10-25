@@ -5,3 +5,4 @@ debug
 **/debug.test
 kubectl
 .DS_Store
+kube-graffiti-*.tgz
