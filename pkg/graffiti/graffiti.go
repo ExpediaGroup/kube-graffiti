@@ -16,13 +16,9 @@ limitations under the License.
 package graffiti
 
 import (
-	//"github.com/HotelsDotCom/istio-namespace-webhook/pkg/log"
-
 	"bytes"
 	"encoding/json"
 	"fmt"
-
-	// "github.com/davecgh/go-spew/spew"
 
 	"github.com/HotelsDotCom/kube-graffiti/pkg/log"
 	"github.com/rs/zerolog"
