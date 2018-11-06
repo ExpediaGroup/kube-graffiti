@@ -17,12 +17,12 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/HotelsDotCom/kube-graffiti/pkg/log"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
 	clientcorev1 "k8s.io/client-go/kubernetes/typed/core/v1"
-	"stash.hcom/run/kube-graffiti/pkg/log"
 
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"

@@ -16,10 +16,10 @@ package graffiti
 import (
 	"fmt"
 
+	"github.com/HotelsDotCom/kube-graffiti/pkg/log"
 	"github.com/rs/zerolog"
 	"k8s.io/apimachinery/pkg/fields"
 	labels "k8s.io/apimachinery/pkg/labels"
-	"stash.hcom/run/kube-graffiti/pkg/log"
 )
 
 // Matchers manages the rules of matching an object

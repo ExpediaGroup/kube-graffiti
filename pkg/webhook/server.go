@@ -20,10 +20,10 @@ import (
 	"net/http"
 	"net/url"
 
+	"github.com/HotelsDotCom/kube-graffiti/pkg/graffiti"
+	"github.com/HotelsDotCom/kube-graffiti/pkg/log"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
-	"stash.hcom/run/kube-graffiti/pkg/graffiti"
-	"stash.hcom/run/kube-graffiti/pkg/log"
 )
 
 const (

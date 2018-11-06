@@ -17,10 +17,10 @@ import (
 	"errors"
 	"fmt"
 
-	"stash.hcom/run/kube-graffiti/pkg/graffiti"
-	"stash.hcom/run/kube-graffiti/pkg/healthcheck"
-	"stash.hcom/run/kube-graffiti/pkg/log"
-	"stash.hcom/run/kube-graffiti/pkg/webhook"
+	"github.com/HotelsDotCom/kube-graffiti/pkg/graffiti"
+	"github.com/HotelsDotCom/kube-graffiti/pkg/healthcheck"
+	"github.com/HotelsDotCom/kube-graffiti/pkg/log"
+	"github.com/HotelsDotCom/kube-graffiti/pkg/webhook"
 )
 
 const (

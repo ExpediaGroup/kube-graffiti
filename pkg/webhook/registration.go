@@ -18,10 +18,10 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/HotelsDotCom/kube-graffiti/pkg/log"
 	admissionreg "k8s.io/api/admissionregistration/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
-	"stash.hcom/run/kube-graffiti/pkg/log"
 )
 
 type Registration struct {

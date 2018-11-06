@@ -3,7 +3,7 @@ TAG    := $(shell git describe --tags)
 IMG    := ${NAME}:${TAG}
 LATEST := ${NAME}:latest
 
-build:
+build:test
 	@docker build -t "${IMG}" .
 	@docker tag ${IMG} ${LATEST}
  
@@ -15,3 +15,6 @@ login:
 
 chart:
 	@helm package --app-version ${TAG} ./helm/kube-graffiti
+
+test:
+	@go test ./...

@@ -14,7 +14,7 @@ limitations under the License.
 package main
 
 import (
-	"stash.hcom/run/kube-graffiti/cmd"
+	"github.com/HotelsDotCom/kube-graffiti/cmd"
 )
 
 func main() {
