@@ -47,6 +47,11 @@ func createPatchOperand(src, add, fm map[string]string, del []string, path strin
 		return "", nil
 	}
 
+	// do not return a patch where there are not any changes
+	if len(src) == 0 && len(modified) == 0 {
+		return "", nil
+	}
+
 	// we are left with new values, we need to either add a new path or replace it.
 	if len(src) == 0 {
 		return renderStringMapAsPatch("add", path, modified), nil
@@ -56,9 +61,6 @@ func createPatchOperand(src, add, fm map[string]string, del []string, path strin
 
 // renderStringMapAsPatch builds a json patch string from operand, path and a map
 func renderStringMapAsPatch(op, path string, m map[string]string) string {
-	if len(m) == 0 {
-		return ""
-	}
 	patch := `{ "op": "` + op + `", "path": "` + path + `", "value": { `
 	var values []string
 	for k, v := range m {
