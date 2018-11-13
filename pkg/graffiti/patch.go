@@ -47,10 +47,6 @@ func createPatchOperand(src, add, fm map[string]string, del []string, path strin
 		return "", nil
 	}
 
-	// when we have deleted all labels or annotations then we need to remove the whole path.
-	if len(src) > 0 && len(modified) == 0 {
-		return `{ "op": "delete", "path": "` + path + `" }`, nil
-	}
 	// we are left with new values, we need to either add a new path or replace it.
 	if len(src) == 0 {
 		return renderStringMapAsPatch("add", path, modified), nil
