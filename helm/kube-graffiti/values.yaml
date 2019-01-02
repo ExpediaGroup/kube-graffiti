@@ -5,8 +5,8 @@
 replicaCount: 1
 
 image:
-  repository: please-change-me/kube-graffiti
-  tag: 0.1.14
+  repository: hotelsdotcom/kube-graffiti
+  tag: 0.8.2
   pullPolicy: IfNotPresent
 
 nameOverride: ""

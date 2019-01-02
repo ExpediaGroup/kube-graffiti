@@ -20,9 +20,6 @@ Here's a few examples of the kinds of things that you might want *kube-graffiti*
 
 **Labelling all namespaces except 'kube-system', 'kube-public' and 'default' for Istio side-car injection**
 ```
-server:
-  namespace: kube-graffiti
-  service: kube-graffiti
 rules:
 - registration:
     name: namespace-enable-istio-injection
@@ -46,9 +43,6 @@ rules:
 
 **Annotating specific Namespaces to Enable Kiam**
 ```
-server:
-  namespace: kube-graffiti
-  service: kube-graffiti
 rules:
 - registration:
     name: namespace-allows-kiam
@@ -74,9 +68,6 @@ rules:
 
 **Add a 'name' label to each namespace (i.e. useful for native kubernetes label selectors)**
 ```
-server:
-  namespace: kube-graffiti
-  service: kube-graffiti
 rules:
 - registration:
     name: add-name-label-to-namespaces
@@ -99,9 +90,6 @@ rules:
 **Add ownership labels to certain objects in the 'Mobile' team's namespace**
 
 ```
-server:
-  namespace: kube-graffiti
-  service: kube-graffiti
 rules:
 - registration:
     name: add-name-label-to-namespaces
@@ -144,7 +132,7 @@ rules:
 *note2* - the 'add-name-label-to-namespaces' rule has been added to provide the required name label on the namespace.
 *note3* - there are other ways of matching namespaces, such as using a label-selector or field-selector in the matcher rule, and these will work, but will result in more objects being passed through the *kube-graffiti* webhooks for evaluation, which can impact on cluster performance.
 
-**Blocking an deployment, pod, job**
+**Blocking a deployment, pod or job**
 
 Note, there are other ways to do this - you should take a look at [ImagePolicyWebhook](https://kubernetes.io/docs/reference/access-authn-authz/admission-controllers/#imagepolicywebhook).  This demonstrates what you could do, remembering that you have api, version, resource-type, namespace-selector, label-selector and field-selectors to use to pin the object you want to target using the value of just about **any** field.
 
@@ -166,7 +154,6 @@ Note, there are other ways to do this - you should take a look at [ImagePolicyWe
     - spec.template.spec.containers.0.image=nginx
   payload:
     block: true
-      labels:
 ```
 
 *note1* - field selectors do not allow spaces around the '=' whereas label and namespace selectors are completely happy with them..
@@ -174,56 +161,15 @@ Note, there are other ways to do this - you should take a look at [ImagePolicyWe
 Installation
 ------------
 
-Update the `Makefile` with your docker repository (your_docker_repository) and make the kube-graffiti docker container: -
+`kube-graffiti` is best deployed via this helm chart.
+
+NOTE: You can deploy the default certificates 'as-is' but you MUST deply to the namespace `kube-graffiti` and you must not change the service name in order for the certificate to be valid!
 
 ```
-$ make build
-Must remake target `build'.
-Putting child 0x7fe800f00560 (build) PID 30636 on the chain.
-Live child 0x7fe800f00560 (build) PID 30636
-Sending build context to Docker daemon  213.4MB
-Step 1/11 : FROM golang:1.10 as gobuild
- ---> d0e7a411e3da
-Step 2/11 : WORKDIR /go/src/github.com/HotelsDotCom/kube-graffiti
- ---> Using cache
- ---> 1e341f1aeb5e
-Step 3/11 : ENV CGO_ENABLED=0 GOOS=linux
- ---> Using cache
- ---> ba4426d3621b
-Step 4/11 : USER $UID
- ---> Using cache
- ---> 759d4faf1b6e
-Step 5/11 : COPY . .
- ---> 40c300281261
-Step 6/11 : RUN go build -a -v
- ---> Running in e864fe5fc3b9
-...
-Successfully built ba7f0a11d19c
-Successfully tagged hotelsdotcom/kube-graffiti:0.1.14
+$ helm install --namespace kube-graffiti stable/kube-graffiti
 ```
 
-Push it to your repository: -
-
-```
-$ make push
-```
-
-To deploy via a Helm chart, first build the chart: -
-
-```
-$ make chart
-Successfully packaged chart and saved it to: .../kube-graffiti/kube-graffiti-0.8.0.tgz
-```
-
-Deploy with helm: -
-
-NOTE: Using the default certificates as-is is fine but you MUST deploy kube-graffiti to the namespace `kube-graffiti` with the default service name `kube-graffiti` in order for the default certificate to be valid!
-
-```
-$ helm install --namespace kube-graffiti ./kube-graffiti-0.8.0.tgz --set image.repository=your_docker_repository --set image.tag=0.1.14
-```
-
-To define your own graffiti ruleset (or change any other chart settings) create an override yaml file (e.g. myrules.yaml), e.g.: -
+To define your own graffiti ruleset (or change any other chart settings) create an values file (e.g. myrules.yaml), e.g.: -
 
 ```
 rules:
@@ -248,7 +194,7 @@ Note: I recommend that you keep the `add-name-label-to-namespaces` rule and add 
 Then install or upgrade the chart with your values file: -
 
 ```
-helm install --namespace kube-graffiti ./kube-graffiti-0.8.0.tgz --set image.repository=your_docker_repository --set image.tag=0.1.14 --values myrules.yaml
+helm install --namespace kube-graffiti stable/kube-graffiti --values myrules.yaml
 ```
 
 You can also create your own configmap and use it instead of the default one by specifying its name in the `configMapName` value.
@@ -256,44 +202,96 @@ You can also create your own configmap and use it instead of the default one by 
 Configuration
 -------------
 
-*kube-graffiti* requires a configuration file in either yaml, json, toml or hcl format (depending on your preference) and will by default look for it at the path "/config.{yaml,json,toml,hcl}" - you can use the --config command line parameter to change it.
-
-**Webhook Server Configuration**
-
-See configuration example in testing/configmap.yaml
-
-Because *kube-graffiti* runs as a kubernetes mutating webhook, it must trust TLS connections from the kubernetes apiserver and vice-versa the apiserver must trust it when delegating admission requests to it.  You must create a ca, server certificate and private key for it, (you could use the **gencerts.sh** script in the 'testing' folder).  These certificates are best placed into a kubernetes secret (see testing/webhook-tls-secret.yaml) and then mounted into the *kube-graffiti* pod as shown in testing/deploy.yaml deployment example.
-
-By default, *kube-graffiti* will look for certificate at the following paths (files have no dot extension): -
-
-* /ca-cert
-* /server-cert
-* /server-key
-
-The kubernetes apiserver must be told where to find *kube-graffiti* so you must always specify the namespace and service where *kube-graffiti* has been installed in the 'server' section.  
-
-*kube-grafffiti* has the following server configuration options and default values :-
+The *kube-graffiti* configuration is controlled by the following values (with their defaults)
 
 ```
-log-level: info
-check-existing: false
-health-checker:
+replicaCount: 1  # The number of instances of kube-graffiti pods to deploy
+# You can change the image (for testing)
+image:
+  repository: hotelsdotcom/kube-graffiti
+  tag: 0.8.2
+  pullPolicy: IfNotPresent
+
+# nameOverride and fullnameOverride allow you to change the way that the chart/release name is generated
+nameOverride: ""
+fullnameOverride: ""
+
+service:
+  # name - override the default service name (if you do please make sure you also generate new certificates!)
+  name: kube-graffiti
+  port: 443
+  type: ClusterIP
+
+# Default resource size for the deployment/pod
+resources:
+  limits:
+    cpu: 500m
+    memory: 256Mi
+  requests:
+    cpu: 100m
+    memory: 64Mi
+
+# Use these settings to control the placement of the pod
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+# We recommend that you configure kube-graffiti from the chart but you can alternatively point at an existing configmap which contains the kube-graffiti configuration
+# in yaml format
+configMapName: ""
+
+#
+# Webhook Server Configuration
+#
+
+# logLevel controls the verbosity of logging to the kube-graffiti pod log, can be "debug", "info", "warn", "error"
+logLevel: info
+
+# checkExisting toggles the checking and mutation of existing objects that match the graffiti rules.
+checkExisting: "true"
+
+# healthChecker modifies the checking of kube-graffiti pod health and usually does not need to be modified 
+healthChecker:
   port: 8080
   path: /healthz
+
+# The "server" settings control how the webhooks get registered and the ssl certificate security
 server:
   port: 8443
-  company-domain: acme.com
-  namespace: ""
-  service: ""
-  ca-cert-path: /tls/ca-cert
-  cert-path: /tls/server-cert
-  key-path: /tls/server-key
+  companyDomain: acme.org
+  # NOTE: certificates are added as base64 encodings of their data (default cert assumes deployment to namespace 'kube-graffiti')
+  caData: << EXCLUDED >>
+  keyData: << EXCLUDED >>
+  certData: << EXCLUDED >>
+
+# rules - your kube-graffiti rules.  These get added to a configmap which is loaded into the kube-graffiti pod at startup.
+rules:
+# Each rule must have a registration section which targets which objects the kube-apisever will send to kube-graffiti
+- registration:
+# every graffiti-rule must have a unique name!
+    name: add-name-label-to-namespaces
+    targets:
+    - api-groups:
+      - ""
+      api-versions:
+      - v1
+      resources:
+      - namespaces
+    # Warning - setting failure-policy to 'Fail' will prevent targetted objects from being created/update if kube-graffiti is not running!
+    failure-policy: Ignore
+# <- This example rule does not contain a 'matchers' section because the targets with the registration is sufficient in this case
+  payload:
+  # A payload can contain labels/annotations 'additions' and/or 'deletions', a 'block' or a 'json-patch'
+    additions:
+      labels:
+        # An example of using templating within a label addition to pull the name from an objects metadata name
+        name: '{{ index . "metadata.name" }}'
 ```
 
-You must specify values for "server.namespace" and "server.service" but you can omit any of the settings that you want to leave at their default settings.
+Please see the following sections for more details on how to construct valid and useful kube-graffiti rules.
 
-Rules
------
+Graffiti Rules
+--------------
 
 You need to have at least one rule in your configuration and can scale to as many rules that you want (and are willing to scale the kube apiserver and your *kube-graffiti* deployment to support).
 
@@ -536,132 +534,6 @@ rules:
 
 *note* - an example of an **extremely dangerous** rule!
 
-kubernetes RBAC rules
----------------------
-
-*kube-graffiti* needs (as a minimum) the following rbac permissions: -
-
-* read the configmap 'extension-apiserver-authentication' in the 'kube-system' namespace
-* create, delete 'mutatingwebhookconfigurations'
-* list namespaces - used for the health-check
-
-The following kubernetes objects configure this basic access, assuming that you choose to run kube-graffiti in its own namespace 'kube-graffiti': -
-
-**roles**
-```
-apiVersion: rbac.authorization.k8s.io/v1beta1
-kind: Role
-metadata:
-  name: read-apiserver-authentication
-  namespace: kube-system
-  labels:
-    app: kube-graffiti
-rules:
-  - apiGroups:
-      - ""
-    resources:
-      - "configmaps"
-    resourceNames: 
-      - "extension-apiserver-authentication"
-    verbs:
-      - get
-      - list
----
-apiVersion: rbac.authorization.k8s.io/v1beta1
-kind: ClusterRole
-metadata:
-  name: manage-mutating-webhooks
-  namespace: kube-system
-  labels:
-    app: kube-graffiti
-rules:
-  - apiGroups:
-      - admissionregistration.k8s.io
-    resources:
-      - mutatingwebhookconfigurations
-    verbs:
-      - get
-      - create
-      - delete
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
-metadata:
-  name: list-namespaces
-  labels:
-    app: kube-graffiti
-rules:
-  - apiGroups:
-      - ""
-    resources:
-      - namespaces
-    verbs:
-      - get
-      - list
-```
-
-**role bindings**
-```
-apiVersion: rbac.authorization.k8s.io/v1beta1
-kind: ClusterRoleBinding
-metadata:
-  name: kube-graffiti-manage-mutating-webhooks
-  labels:
-    app: kube-graffiti
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: manage-webhooks
-subjects:
-  - kind: ServiceAccount
-    name: kube-graffiti
-    namespace: kube-graffiti
----
-apiVersion: rbac.authorization.k8s.io/v1beta1
-kind: RoleBinding
-metadata:
-  name: read-apiserver-authentication
-  namespace: kube-system
-  labels:
-    app: kube-graffiti
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: manage-mutating-webhooks
-subjects:
-  - kind: ServiceAccount
-    name: kube-graffiti
-    namespace: kube-graffiti
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
-metadata:
-  name: kube-graffiti-list-namespaces
-  labels:
-    app: kube-graffiti
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: list-namespaces
-subjects:
-  - kind: ServiceAccount
-    name: kube-graffiti
-    namespace: kube-graffiti
-```
-
-**service account**
-```
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: kube-graffiti
-  namespace: kube-graffiti
-  labels:
-    app: kube-graffiti
-```
-
-This is the minimal level of access required for *kube-graffiti* to operate as a mutating webhook.  If you want it to be able to update existing entires (not yet available) then you will need to give *kube-graffiti* **update** permissions on **all** objects that you want it to be able to modify.
-
 Checking Existing Objects
 -------------------------
 
@@ -707,7 +579,3 @@ or
       - deployments
 ```
 
-Contributing
-------------
-
-Submit a PR to this repository, following the [contributors guide](https://github.com/HotelsDotCom/kube-graffiti/CONTRIBUTING.md).
