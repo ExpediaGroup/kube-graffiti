@@ -205,7 +205,9 @@ Configuration
 The *kube-graffiti* configuration is controlled by the following values (with their defaults)
 
 ```
-replicaCount: 1  # The number of instances of kube-graffiti pods to deploy
+# The number of instances of kube-graffiti pods to deploy
+replicaCount: 1
+
 # You can change the image (for testing)
 image:
   repository: hotelsdotcom/kube-graffiti
@@ -231,7 +233,7 @@ resources:
     cpu: 100m
     memory: 64Mi
 
-# Use these settings to control the placement of the pod
+# Use these settings to fine control the placement of the deployed pod
 nodeSelector: {}
 tolerations: []
 affinity: {}
@@ -245,12 +247,13 @@ configMapName: ""
 #
 
 # logLevel controls the verbosity of logging to the kube-graffiti pod log, can be "debug", "info", "warn", "error"
+# default kube-graffiti configuration
 logLevel: info
 
 # checkExisting toggles the checking and mutation of existing objects that match the graffiti rules.
 checkExisting: "true"
 
-# healthChecker modifies the checking of kube-graffiti pod health and usually does not need to be modified 
+# healthChecker modifies the checking of kube-graffiti pod health and usually does not need to be modified
 healthChecker:
   port: 8080
   path: /healthz
@@ -258,17 +261,22 @@ healthChecker:
 # The "server" settings control how the webhooks get registered and the ssl certificate security
 server:
   port: 8443
+  # Feel free to change the companyDomain to that of your organisation - used in the registration of a webook
   companyDomain: acme.org
   # NOTE: certificates are added as base64 encodings of their data (default cert assumes deployment to namespace 'kube-graffiti')
-  caData: << EXCLUDED >>
-  keyData: << EXCLUDED >>
-  certData: << EXCLUDED >>
+  caData: (removed)
+  keyData: (removed)
+  certData: (removed)
+
+#
+# Graffiti Rules
+#
 
 # rules - your kube-graffiti rules.  These get added to a configmap which is loaded into the kube-graffiti pod at startup.
 rules:
 # Each rule must have a registration section which targets which objects the kube-apisever will send to kube-graffiti
 - registration:
-# every graffiti-rule must have a unique name!
+    # every graffiti-rule must have a unique name!
     name: add-name-label-to-namespaces
     targets:
     - api-groups:
@@ -279,9 +287,9 @@ rules:
       - namespaces
     # Warning - setting failure-policy to 'Fail' will prevent targetted objects from being created/update if kube-graffiti is not running!
     failure-policy: Ignore
-# <- This example rule does not contain a 'matchers' section because the targets with the registration is sufficient in this case
+  # This example rule does not contain a 'matchers' section because the targets with the registration is sufficient in this case
   payload:
-  # A payload can contain labels/annotations 'additions' and/or 'deletions', a 'block' or a 'json-patch'
+    # A payload can contain labels/annotations 'additions' and/or 'deletions', a 'block' or a 'json-patch'
     additions:
       labels:
         # An example of using templating within a label addition to pull the name from an objects metadata name
