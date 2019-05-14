@@ -78,7 +78,7 @@ func (p Payload) paintObject(object metaObject, fm map[string]string, logger zer
 		return nil, nil
 	}
 
-	mylog.Info().Str("patch", patchString).Msg("created json patch")
+	mylog.Debug().Str("patch", patchString).Msg("created json patch")
 	return []byte(patchString), nil
 }
 

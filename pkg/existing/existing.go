@@ -121,7 +121,7 @@ func ApplyRulesAgainstExistingObjects(rules []config.Rule) {
 // ApplyRuleAgainstExistingObjects checks a single graffiti rule against existing kubernetes objects
 func ApplyRuleAgainstExistingObjects(rule config.Rule) {
 	mylog := log.ComponentLogger(componentName, "ApplyRuleAgainstExistingObjects")
-	mylog.Info().Str("rule", rule.Registration.Name).Msg("applying rule to existing objects")
+	mylog.Debug().Str("rule", rule.Registration.Name).Msg("applying rule to existing objects")
 	for _, target := range rule.Registration.Targets {
 		applyToTargetttedAPIGroupsAndVersions(&rule, target)
 	}
@@ -132,7 +132,7 @@ func ApplyRuleAgainstExistingObjects(rule config.Rule) {
 func applyToTargetttedAPIGroupsAndVersions(rule *config.Rule, target webhook.Target) {
 	mylog := log.ComponentLogger(componentName, "applyToTargetttedAPIGroupsAndVersions")
 	rlog := mylog.With().Str("rule", rule.Registration.Name).Str("target-apigroups", strings.Join(target.APIGroups, ",")).Str("target-versions", strings.Join(target.APIVersions, ",")).Str("target-resources", strings.Join(target.Resources, ",")).Logger()
-	rlog.Info().Msg("evaluating target")
+	rlog.Debug().Msg("evaluating target")
 
 	// handle wildcard '*'
 	var targetGroups []string
@@ -228,7 +228,7 @@ func splitGroupVersionString(s string) (group, version string) {
 func applyToAllResourcesOfType(rule *config.Rule, gv string, resource metav1.APIResource) {
 	mylog := log.ComponentLogger(componentName, "applyToAllResourcesOfType")
 	rlog := mylog.With().Str("rule", rule.Registration.Name).Str("group-version", gv).Str("resource", resource.Name).Logger()
-	rlog.Info().Msg("looking at resources of type")
+	rlog.Debug().Msg("looking at resources of type")
 
 	g, v := splitGroupVersionString(gv)
 	// get a dynamic client resource interface
@@ -246,7 +246,7 @@ func applyToAllResourcesOfType(rule *config.Rule, gv string, resource metav1.API
 		return
 	}
 	if list == nil {
-		rlog.Info().Msg("no resources found")
+		rlog.Debug().Msg("no resources found")
 		return
 	}
 	rlog.Debug().Int("number-resources", len(list.Items)).Msg("processing batch of resources")
@@ -263,7 +263,7 @@ func applyToAllResourcesOfType(rule *config.Rule, gv string, resource metav1.API
 			return
 		}
 		if list == nil {
-			rlog.Info().Msg("no resources found")
+			rlog.Debug().Msg("no resources found")
 			return
 		}
 		rlog.Debug().Int("number-resources", len(list.Items)).Msg("processing batch of resources")
@@ -282,7 +282,7 @@ func applyToObject(rule *config.Rule, gv, resource string, object unstructured.U
 	name := object.GetName()
 	namespace := object.GetNamespace()
 	rlog := mylog.With().Str("rule", rule.Registration.Name).Str("group-version", gv).Str("kind", kind).Str("name", name).Str("namespace", namespace).Logger()
-	rlog.Info().Msg("checking object")
+	rlog.Debug().Msg("checking object")
 
 	// match against optional rule namespace selector
 	if rule.Registration.NamespaceSelector != "" {
@@ -291,7 +291,7 @@ func applyToObject(rule *config.Rule, gv, resource string, object unstructured.U
 			rlog.Error().Err(err).Msg("error checking object against namespace selector")
 		}
 		if !match {
-			rlog.Info().Msg("object does not match namespace selector")
+			rlog.Debug().Msg("object does not match namespace selector")
 			return false
 		}
 	}
