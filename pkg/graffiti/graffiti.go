@@ -182,6 +182,6 @@ func (r Rule) Mutate(object []byte) (patch []byte, err error) {
 		return r.Payload.paintObject(metaObject, fieldMap, mylog)
 	}
 
-	mylog.Info().Msg("rule didn't match - not painting object")
+	mylog.Debug().Msg("rule didn't match - not painting object")
 	return nil, nil
 }
