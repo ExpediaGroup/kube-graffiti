@@ -328,11 +328,11 @@ func applyToObject(rule *config.Rule, gv, resource string, object unstructured.U
 	ri := dynamicClient.Resource(grv)
 	if namespace == "" {
 		rlog.Debug().Msg("patching cluster level object")
-		_, err = ri.Patch(name, types.JSONPatchType, patch)
+		_, err = ri.Patch(name, types.JSONPatchType, patch, metav1.PatchOptions{FieldManager: "kube-graffiti"})
 	} else {
 		rlog.Debug().Msg("patching namespaced object")
 		nri := ri.Namespace(namespace)
-		_, err = nri.Patch(name, types.JSONPatchType, patch)
+		_, err = nri.Patch(name, types.JSONPatchType, patch, metav1.PatchOptions{FieldManager: "kube-graffiti"})
 	}
 	if err != nil {
 		rlog.Error().Err(err).Msg("failed to patch object")

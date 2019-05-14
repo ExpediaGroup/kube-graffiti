@@ -73,17 +73,17 @@ type mockDynamicResourceInterface struct {
 	mock.Mock
 }
 
-func (rc *mockDynamicResourceInterface) Create(obj *unstructured.Unstructured, subresources ...string) (*unstructured.Unstructured, error) {
+func (rc *mockDynamicResourceInterface) Create(obj *unstructured.Unstructured, options metav1.CreateOptions, subresources ...string) (*unstructured.Unstructured, error) {
 	args := rc.Called(obj, subresources)
 	return args.Get(0).(*unstructured.Unstructured), args.Error(1)
 }
 
-func (rc *mockDynamicResourceInterface) Update(obj *unstructured.Unstructured, subresources ...string) (*unstructured.Unstructured, error) {
+func (rc *mockDynamicResourceInterface) Update(obj *unstructured.Unstructured, options metav1.UpdateOptions, subresources ...string) (*unstructured.Unstructured, error) {
 	args := rc.Called(obj, subresources)
 	return args.Get(0).(*unstructured.Unstructured), args.Error(1)
 }
 
-func (rc *mockDynamicResourceInterface) UpdateStatus(obj *unstructured.Unstructured) (*unstructured.Unstructured, error) {
+func (rc *mockDynamicResourceInterface) UpdateStatus(obj *unstructured.Unstructured, options metav1.UpdateOptions) (*unstructured.Unstructured, error) {
 	args := rc.Called(obj)
 	return args.Get(0).(*unstructured.Unstructured), args.Error(1)
 }
@@ -113,7 +113,7 @@ func (rc *mockDynamicResourceInterface) Watch(opts metav1.ListOptions) (watch.In
 	return args.Get(0).(watch.Interface), args.Error(1)
 }
 
-func (rc *mockDynamicResourceInterface) Patch(name string, pt types.PatchType, data []byte, subresources ...string) (*unstructured.Unstructured, error) {
+func (rc *mockDynamicResourceInterface) Patch(name string, pt types.PatchType, data []byte, options metav1.PatchOptions, subresources ...string) (*unstructured.Unstructured, error) {
 	args := rc.Called(name, pt, data, subresources)
 
 	if args.Get(0) == nil {

@@ -1,4 +1,4 @@
-FROM golang:1.10 as gobuild
+FROM golang:1.12 as gobuild
 WORKDIR /go/src/github.com/HotelsDotCom/kube-graffiti
 ENV CGO_ENABLED=0 GOOS=linux
 USER $UID
