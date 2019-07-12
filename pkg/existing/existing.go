@@ -95,7 +95,6 @@ func discoverAPIsAndResources() error {
 	sliceOfResourceLists, err := discoveryClient.ServerResources()
 	if err != nil {
 		mylog.Error().Err(err).Msg("failed to look up kubernetes resources")
-		return fmt.Errorf("failed to discover kubernetes api resources: %v", err)
 	}
 	for _, gv := range sliceOfResourceLists {
 		discoveredResources[gv.GroupVersion] = gv.APIResources
