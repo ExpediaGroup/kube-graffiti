@@ -8,7 +8,7 @@ replicaCount: 1
 # You can change the image (for testing)
 image:
   repository: hotelsdotcom/kube-graffiti
-  tag: 0.8.4
+  tag: 0.8.5
   pullPolicy: IfNotPresent
 
 # nameOverride and fullnameOverride allow you to change the way that the chart/release name is generated
