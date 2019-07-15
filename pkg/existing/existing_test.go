@@ -310,7 +310,7 @@ func TestCachingDiscoveredAPISandResources(t *testing.T) {
 	assert.Equal(t, 3, len(discoveredResources["apps/v1"]), "the test apps/v1 api has three resource types")
 }
 
-func TestServerAPIGroupLookupFailureReturnsAnError(t *testing.T) {
+func TestServerAPIGroupLookupFailureDoesNotReturnAnError(t *testing.T) {
 	// set up some mock return values
 	var sg metav1.APIGroupList
 	err := yaml.Unmarshal([]byte(testAPIList), &sg)
@@ -325,7 +325,7 @@ func TestServerAPIGroupLookupFailureReturnsAnError(t *testing.T) {
 	dc.On("ServerResources").Return(srl, errors.New("something went wrong"))
 
 	err = discoverAPIsAndResources()
-	require.Error(t, err, "we should return an error when server api groups fail")
+	require.NoError(t, err, "we should return an error when server api groups fail")
 }
 
 func TestServerAPIResourcesLookupFailureReturnsAnError(t *testing.T) {
