@@ -82,7 +82,7 @@ func (s Server) RegisterHook(r Registration, clientset *kubernetes.Clientset) er
 		ObjectMeta: metav1.ObjectMeta{
 			Name: r.Name,
 		},
-		Webhooks: []admissionreg.Webhook{
+		Webhooks: []admissionreg.MutatingWebhook{
 			{
 				Name:              r.Name + "." + s.CompanyDomain,
 				FailurePolicy:     &failurePolicy,
