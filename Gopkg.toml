@@ -20,14 +20,14 @@
 #  version = "2.4.0"
 
 [[constraint]]
-  branch = "release-1.14"
+  branch = "release-1.15"
   name = "k8s.io/api"
 
 [[constraint]]
-  branch = "release-1.14"
+  branch = "release-1.15"
   name = "k8s.io/apimachinery"
 
 [[constraint]]
   name = "k8s.io/client-go"
-  version = "v11.0.0"
+  version = "kubernetes-1.15.0"
 

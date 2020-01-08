@@ -51,6 +51,20 @@
   version = "v1.3.1"
 
 [[projects]]
+  digest = "1:c35d25413dce110e4ff2ca871c648bf5365ab8c954021394cabd39f5e0566fd8"
+  name = "github.com/google/go-cmp"
+  packages = [
+    "cmp",
+    "cmp/internal/diff",
+    "cmp/internal/flags",
+    "cmp/internal/function",
+    "cmp/internal/value",
+  ]
+  pruneopts = ""
+  revision = "5a6f75716e1203a923a78c9efb94089d857df0f6"
+  version = "v0.4.0"
+
+[[projects]]
   digest = "1:8d4a577a9643f713c25a32151c0f26af7228b4b97a219b5ddb7fd38d16f6e673"
   name = "github.com/google/gofuzz"
   packages = ["."]
@@ -367,8 +381,8 @@
   version = "v2.2.2"
 
 [[projects]]
-  branch = "release-1.14"
-  digest = "1:d8a6f1ec98713e685346a2e4b46c6ec4a1792a5535f8b0dffe3b1c08c9d69b12"
+  branch = "release-1.15"
+  digest = "1:46d8aaaf9d03291ce0989e34af05ede74b81ab193f3dd8bc9263487a0722b931"
   name = "k8s.io/api"
   packages = [
     "admission/v1beta1",
@@ -410,11 +424,11 @@
     "storage/v1beta1",
   ]
   pruneopts = ""
-  revision = "40a48860b5abbba9aa891b02b32da429b08d96a0"
+  revision = "3a12735a829ac2f7817379647da6d47c39327512"
 
 [[projects]]
-  branch = "release-1.14"
-  digest = "1:a802c91b189a31200cfb66744441fe62dac961ec7c5c58c47716570de7da195c"
+  branch = "release-1.15"
+  digest = "1:86667aeeaaad11106ab0f509e7949bfff5d25ece5c59ac25556f367566a46e80"
   name = "k8s.io/apimachinery"
   packages = [
     "pkg/api/equality",
@@ -461,10 +475,10 @@
     "third_party/forked/golang/reflect",
   ]
   pruneopts = ""
-  revision = "6a84e37a896db9780c75367af8d2ed2bb944022e"
+  revision = "31ade1b30762be61c32b2e8db2a11aa8b0b8960e"
 
 [[projects]]
-  digest = "1:c2944ab044242534ad7c4b20de548b1df8a6e06ad739ab53b01042a59c4b6991"
+  digest = "1:3e4ec3cb3a7d86a34af350e9fd388ead463793987a4bbcdc8c17b85eed20a6c3"
   name = "k8s.io/client-go"
   packages = [
     "discovery",
@@ -527,8 +541,8 @@
     "util/retry",
   ]
   pruneopts = ""
-  revision = "6ee68ca5fd8355d024d02f9db0b3b667e8357a0f"
-  version = "v11.0.0"
+  revision = "78d2af792babf2dd937ba2e2a8d99c753a5eda89"
+  version = "kubernetes-1.15.0"
 
 [[projects]]
   digest = "1:4b78eccecdf36f29cacc19ca79411f2235e0387af52b11f1d77328d7ad5d84a2"
